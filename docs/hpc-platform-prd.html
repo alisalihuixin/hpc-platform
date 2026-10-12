@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HPC 作业调度与计费管理平台 · PRD v0.1</title>
+<style>
+  :root {
+    --ink: #1b1f24;
+    --ink-soft: #5a6472;
+    --line: #e3e7ee;
+    --bg: #f6f7fa;
+    --card: #ffffff;
+    --brand: #1f5fd6;
+    --brand-soft: #eaf0fd;
+    --warn: #b8720a;
+    --warn-soft: #fdf3e2;
+    --danger: #c0392b;
+    --danger-soft: #fdeceb;
+    --ok: #1f7a4d;
+    --ok-soft: #e9f6ef;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", "Source Han Sans SC",
+      system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px 96px; }
+  header.doc {
+    padding: 56px 0 28px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 32px;
+  }
+  header.doc h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: -0.3px; }
+  header.doc .sub { color: var(--ink-soft); margin-bottom: 18px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px 28px; font-size: 13px; color: var(--ink-soft); }
+  .meta b { color: var(--ink); font-weight: 600; }
+  .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 40px; align-items: start; }
+  nav.toc {
+    position: sticky; top: 24px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 14px;
+    font-size: 13px;
+    max-height: calc(100vh - 48px);
+    overflow: auto;
+  }
+  nav.toc .t { font-weight: 700; font-size: 12px; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 10px; }
+  nav.toc a { display: block; color: var(--ink-soft); text-decoration: none; padding: 3px 0 3px 8px; border-left: 2px solid transparent; }
+  nav.toc a:hover { color: var(--brand); border-left-color: var(--brand); }
+  nav.toc a.lv2 { padding-left: 20px; font-size: 12.5px; }
+  main { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 36px 48px; min-width: 0; }
+  h2 { font-size: 21px; margin: 44px 0 6px; padding-bottom: 8px; border-bottom: 2px solid var(--brand-soft); }
+  h2:first-of-type { margin-top: 28px; }
+  h3 { font-size: 16.5px; margin: 30px 0 8px; }
+  h4 { font-size: 14.5px; margin: 20px 0 6px; color: var(--ink-soft); letter-spacing: .02em; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code { background: #f1f3f7; border-radius: 4px; padding: 1px 5px; font-size: 13px;
+    font-family: "JetBrains Mono", Consolas, "Courier New", monospace; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 13.5px; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: top; text-align: left; }
+  th { background: #f2f5fa; font-weight: 600; white-space: nowrap; }
+  tbody tr:nth-child(even) { background: #fafbfd; }
+  .chip { display: inline-block; font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 20px;
+    vertical-align: 1px; white-space: nowrap; }
+  .chip.tbd { background: var(--warn-soft); color: var(--warn); border: 1px solid #f0dcb8; }
+  .chip.asm { background: var(--brand-soft); color: var(--brand); border: 1px solid #cfe0fb; }
+  .chip.p0 { background: var(--ok-soft); color: var(--ok); border: 1px solid #c9e8d6; }
+  .chip.p1 { background: #eef0f4; color: var(--ink-soft); border: 1px solid var(--line); }
+  .chip.no { background: var(--danger-soft); color: var(--danger); border: 1px solid #f3cfcb; }
+  .note { border-left: 3px solid var(--brand); background: var(--brand-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 14px 0; font-size: 14px; }
+  .note.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  .fr { border: 1px solid var(--line); border-radius: 8px; padding: 4px 18px 14px; margin: 18px 0 22px; }
+  .fr > h3 { margin-top: 14px; display: flex; align-items: baseline; gap: 10px; }
+  .fr .id { font-family: Consolas, monospace; font-size: 13px; color: var(--brand); font-weight: 700; }
+  .fr dl { margin: 0; }
+  .fr dt { font-weight: 600; font-size: 13.5px; margin-top: 10px; }
+  .fr dd { margin: 4px 0 0; padding-left: 0; }
+  .flow { margin: 16px 0; overflow-x: auto; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+  @media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; max-height: none; }
+    main { padding: 8px 18px 36px; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="doc">
+  <h1>HPC 作业调度与计费管理平台 · 产品需求文档</h1>
+  <div class="sub">管理面定位：在 Slurm / PBS / K8s 之上做统一提交、监控、计量与内部成本核算，不自研调度算法。</div>
+  <div class="meta">
+    <span><b>版本</b> v0.1（初稿，待评审）</span>
+    <span><b>日期</b> 2026-10-12</span>
+    <span><b>状态</b> 框架已出，待补充业务决策</span>
+    <span><b>范围</b> P0 主线 + P1 支撑</span>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="toc">
+  <div class="t">目录</div>
+  <a href="#s1">1. 背景与目标</a>
+  <a href="#s2">2. 范围</a>
+  <a href="#s3">3. 产品模型</a>
+  <a href="#s3-1" class="lv2">3.1 角色</a>
+  <a href="#s3-2" class="lv2">3.2 核心对象</a>
+  <a href="#s3-3" class="lv2">3.3 生命周期状态</a>
+  <a href="#s4">4. 功能需求</a>
+  <a href="#fr01" class="lv2">FR-01 集群与队列接入</a>
+  <a href="#fr02" class="lv2">FR-02 作业提交</a>
+  <a href="#fr03" class="lv2">FR-03 作业监控与日志</a>
+  <a href="#fr04" class="lv2">FR-04 作业操作</a>
+  <a href="#fr05" class="lv2">FR-05 配额管理</a>
+  <a href="#fr06" class="lv2">FR-06 用量计量</a>
+  <a href="#fr07" class="lv2">FR-07 定价管理</a>
+  <a href="#fr08" class="lv2">FR-08 账单与对账</a>
+  <a href="#fr09" class="lv2">FR-09 报表</a>
+  <a href="#fr10" class="lv2">FR-10 通知与审计</a>
+  <a href="#s5">5. 共享规则与异常</a>
+  <a href="#s6">6. 未决问题</a>
+</nav>
+
+<main>
+
+<h2 id="s1">1. 背景与目标</h2>
+
+<h3>1.1 观察到的问题</h3>
+<ul>
+  <li>算力分散在多个调度器（Slurm / PBS / K8s）上，入口各异：用户要记不同集群的登录方式与命令。</li>
+  <li>用量数据散落在各调度器内部，口径不一致，无法横向汇总。</li>
+  <li><b>成本无法归属</b>：没有人能回答「上个周期 A 项目用了多少算力、折合多少成本」。</li>
+  <li>配额靠口头约定与表格维护，超用不可见，事后才发现。</li>
+</ul>
+
+<h3>1.2 受影响用户与时刻</h3>
+<ul>
+  <li><b>科研 / 工程用户</b>：提交作业时（不知去哪个集群、要排多久），以及需要了解自己用量时。</li>
+  <li><b>集群 / 平台管理员</b>：分配配额、核对用量、出成本报表时。</li>
+  <li><b>成本 / 财务负责人</b>：需要按项目分摊算力成本时。</li>
+</ul>
+
+<h3>1.3 产品决策</h3>
+<p>在既有调度器之上建<b>统一管理面</b>。调度算法（排队、优先级、抢占）仍由 Slurm / PBS / K8s 负责，平台不重复实现；平台负责打通这条链路：</p>
+<p><b>统一入口提交 → 统一视图监控 → 统一口径计量 → 归属到账户 / 项目的成本核算 → 周期账单</b>。</p>
+
+<h3>1.4 目标（以可观测结果表述）</h3>
+<ul>
+  <li>用户可在平台内完成一次「提交作业 → 查看结果」的完整流程，全程无需登录具体集群。</li>
+  <li>任意时刻可查到「某账户在某周期内的用量与成本」，且能下钻到具体作业。</li>
+  <li>配额超限时，提交被<b>明确拒绝</b>，并说明原因与恢复方式，而非静默失败。</li>
+</ul>
+<div class="note">
+  不写定量目标（如「效率提升 30%」）：无任何基线数据支撑，写出来即编造。若后续有实测数据再补充。
+</div>
+
+<h2 id="s2">2. 范围</h2>
+
+<h3>2.1 P0：最小完整旅程</h3>
+<p><b>入口条件</b>：用户已登录，且归属于某个账户（项目）。</p>
+<ol>
+  <li>用户选择集群 / 队列，填写作业参数（或套用模板）并提交；</li>
+  <li>平台将作业提交到对应调度器，并展示「排队中 / 运行中」状态；</li>
+  <li>用户可查看作业日志与输出位置；</li>
+  <li>作业结束（完成 / 失败 / 取消），平台记录该作业的用量；</li>
+  <li>用量按单价折算为费用，计入当前账期，归到提交者所在的账户；</li>
+  <li>账期结束后生成账单；用户可查看自己的用量与费用明细。</li>
+</ol>
+<p><b>完成证据</b>：用户能看到作业的最终状态，以及该作业对应的一条用量与费用记录。</p>
+<p><b>最重要失败路径的恢复</b>：提交被拒（配额不足 / 参数非法 / 调度器不可达）时，用户应看到<b>可区分的原因</b>与下一步动作（调整参数、申请配额、稍后重试），且已填写的参数不丢失。</p>
+
+<h3>2.2 P1：支撑能力</h3>
+<ul>
+  <li>作业模板与批量提交；队列切换与重跑；</li>
+  <li>通知（站内 / 邮件）；</li>
+  <li>报表导出；</li>
+  <li>对账与调整单（账单有异议时的冲正流程）；</li>
+  <li>审计日志查询。</li>
+</ul>
+
+<h3>2.3 本期明确不做</h3>
+<ul>
+  <li><span class="chip no">不做</span> 自研调度器（排队、抢占、公平分享算法）；</li>
+  <li><span class="chip no">不做</span> 对外收费能力（在线支付、发票、开票主体）——本期定位是<b>内部成本核算</b>，不产生真实资金流转；</li>
+  <li><span class="chip no">不做</span> 跨集群自动迁移作业。</li>
+</ul>
+
+<h2 id="s3">3. 产品模型</h2>
+
+<h3 id="s3-1">3.1 角色</h3>
+<table>
+  <thead>
+    <tr><th>角色</th><th>主要职责</th><th>数据边界</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>平台管理员</td><td>接入集群、维护队列与全局单价、处置异常</td><td>全部集群与账户</td></tr>
+    <tr><td>成本管理员</td><td>定价、出账、对账、调整</td><td>全部账户的用量与账单（只读作业详情）</td></tr>
+    <tr><td>账户负责人</td><td>管理本账户成员与本账户配额</td><td>仅本账户</td></tr>
+    <tr><td>普通用户</td><td>提交与管理自己的作业</td><td>仅自己的作业与自己的用量</td></tr>
+  </tbody>
+</table>
+<div class="note warn">
+  M1 已交付 <code>admin</code> / <code>user</code> 两个角色。本 PRD 要求扩展为上表四类；
+  与既有两角色的对应关系（例如 <code>admin</code> 是否直接等同「平台管理员」）<span class="chip tbd">TBD</span>。
+</div>
+
+<h3 id="s3-2">3.2 核心对象</h3>
+<table>
+  <thead>
+    <tr><th>对象</th><th>说明</th><th>关键属性</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>账户 Account</td><td>成本归属单元，对应项目或课题组</td><td>名称、负责人、成员、状态</td></tr>
+    <tr><td>集群 Cluster</td><td>一个被接入的调度器实例</td><td>类型（Slurm/PBS/K8s）、连接状态</td></tr>
+    <tr><td>队列 Queue</td><td>集群下的可提交目标（分区 / 队列 / namespace）</td><td>可用资源规格、归属集群</td></tr>
+    <tr><td>作业 Job</td><td>用户提交的一次计算任务</td><td>提交者、账户、目标队列、参数、状态、用量</td></tr>
+    <tr><td>配额 Quota</td><td>账户在某维度上的使用上限</td><td>维度（核时 / GPU时 / 并发作业数）、周期、上限值</td></tr>
+    <tr><td>单价 PriceRule</td><td>用量折算为成本的费率</td><td>适用维度、适用队列、单价、生效区间</td></tr>
+    <tr><td>用量记录 UsageRecord</td><td>一次作业的实际消耗</td><td>作业、资源维度、数量、时间</td></tr>
+    <tr><td>账单 Bill</td><td>某账户在某账期的费用汇总</td><td>账户、账期、金额、明细、状态</td></tr>
+  </tbody>
+</table>
+
+<h3 id="s3-3">3.3 生命周期状态</h3>
+
+<h4>作业状态</h4>
+<div class="flow">
+<svg width="860" height="150" viewBox="0 0 860 150" role="img" aria-label="作业状态机">
+  <defs>
+    <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L7,3 L0,6 z" fill="#5a6472"/>
+    </marker>
+  </defs>
+  <g font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="12.5">
+    <rect x="10" y="40" width="110" height="34" rx="6" fill="#eef0f4" stroke="#c9d1dd"/>
+    <text x="65" y="62" text-anchor="middle" fill="#1b1f24">已提交</text>
+
+    <rect x="188" y="40" width="110" height="34" rx="6" fill="#fdf3e2" stroke="#f0dcb8"/>
+    <text x="243" y="62" text-anchor="middle" fill="#b8720a">排队中</text>
+
+    <rect x="366" y="40" width="110" height="34" rx="6" fill="#eaf0fd" stroke="#cfe0fb"/>
+    <text x="421" y="62" text-anchor="middle" fill="#1f5fd6">运行中</text>
+
+    <rect x="560" y="10" width="110" height="34" rx="6" fill="#e9f6ef" stroke="#c9e8d6"/>
+    <text x="615" y="32" text-anchor="middle" fill="#1f7a4d">已完成</text>
+
+    <rect x="560" y="70" width="110" height="34" rx="6" fill="#fdeceb" stroke="#f3cfcb"/>
+    <text x="615" y="92" text-anchor="middle" fill="#c0392b">失败</text>
+
+    <rect x="740" y="40" width="110" height="34" rx="6" fill="#eef0f4" stroke="#c9d1dd"/>
+    <text x="795" y="62" text-anchor="middle" fill="#5a6472">已取消</text>
+
+    <rect x="188" y="108" width="110" height="34" rx="6" fill="#fdeceb" stroke="#f3cfcb"/>
+    <text x="243" y="130" text-anchor="middle" fill="#c0392b">提交失败</text>
+
+    <line x1="120" y1="57" x2="184" y2="57" stroke="#5a6472" stroke-width="1.2" marker-end="url(#ar)"/>
+    <line x1="298" y1="57" x2="362" y2="57" stroke="#5a6472" stroke-width="1.2" marker-end="url(#ar)"/>
+    <line x1="476" y1="50" x2="556" y2="32" stroke="#5a6472" stroke-width="1.2" marker-end="url(#ar)"/>
+    <line x1="476" y1="64" x2="556" y2="84" stroke="#5a6472" stroke-width="1.2" marker-end="url(#ar)"/>
+    <line x1="120" y1="70" x2="184" y2="118" stroke="#c0392b" stroke-width="1.2" marker-end="url(#ar)"/>
+    <text x="132" y="106" fill="#c0392b" font-size="11">调度器不可达 / 参数非法</text>
+    <path d="M243,74 L243,104" stroke="#c0392b" stroke-width="1.2" marker-end="url(#ar)"/>
+    <line x1="421" y1="40" x2="760" y2="40" stroke="#5a6472" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>
+    <text x="600" y="60" fill="#5a6472" font-size="11" text-anchor="middle">用户取消（排队中/运行中）</text>
+  </g>
+</svg>
+</div>
+<p>「已提交」是平台侧瞬态；一旦调度器受理即进入「排队中」或「运行中」。终态为：已完成 / 失败 / 已取消 / 提交失败，终态不可再变更。</p>
+
+<h4>账单状态</h4>
+<table>
+  <thead><tr><th>状态</th><th>含义</th><th>可执行操作</th></tr></thead>
+  <tbody>
+    <tr><td>草稿</td><td>账期内实时累计，未固化</td><td>随用量变化自动更新</td></tr>
+    <tr><td>已出账</td><td>账期结束，金额已固化</td><td>查看、提出异议、导出</td></tr>
+    <tr><td>有异议</td><td>账户负责人已提出问题，待成本管理员处理</td><td>补充说明、等待调整</td></tr>
+    <tr><td>已关账</td><td>异议已解决或账期结束无异议</td><td>仅查看与导出</td></tr>
+  </tbody>
+</table>
+<p>账期长度与出账时点：<span class="chip tbd">TBD</span>（见 <a href="#s6">第 6 节</a>）。</p>
+
+<h2 id="s4">4. 功能需求</h2>
+<p>以下 FR 按模块组织。<span class="chip p0">P0</span> 为最小旅程必需，<span class="chip p1">P1</span> 为支撑能力。</p>
+
+<div class="fr" id="fr01">
+  <h3><span class="id">FR-01</span> 集群与队列接入 <span class="chip p0">P0</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>让管理员把已有调度器纳入平台，并定义用户可提交的目标。</dd>
+    <dt>触发</dt>
+    <dd>平台管理员新增或更新一个集群 / 队列。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>接入时必须声明调度器类型（Slurm / PBS / K8s）与访问凭据；凭据仅平台管理员可见，其他角色不可读取。</li>
+        <li>接入后平台需能读取该集群的队列列表；队列可作为独立提交目标的粒度 <span class="chip tbd">TBD</span>（分区 / 队列 / namespace 三者选型）。</li>
+        <li>「连接状态」需可察：正常 / 不可达。不可达期间该集群的队列不出现在提交流程中。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>集群 / 队列出现在提交界面的可选列表中；不可达时自动从可选列表移除并给出提示。</dd>
+    <dt>异常</dt>
+    <dd>凭据失效 → 连接状态置为不可达，并通知平台管理员；已提交的历史作业不受影响，仍可查看。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr02">
+  <h3><span class="id">FR-02</span> 作业提交 <span class="chip p0">P0</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>用一个统一入口把作业投递到不同调度器，用户无需感知底层差异。</dd>
+    <dt>触发</dt>
+    <dd>普通用户在某账户下，选择队列并填写参数后提交。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>提交前依次校验：账户归属有效 → 配额未超 → 参数合法 → 目标队列可用。任一不通过即拒绝，且<b>不落作业</b>。</li>
+        <li>校验失败的原因必须可区分，至少覆盖：配额不足、参数非法、队列不可用、调度器不可达。</li>
+        <li>提交成功后，平台记录提交者、所属账户、目标队列与全部参数，作为后续计量与归属的依据。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>作业进入「已提交」→「排队中 / 运行中」；提交失败则落为「提交失败」终态并保留原因。</dd>
+    <dt>字段</dt>
+    <dd>
+      <div class="grid2">
+      <table>
+        <thead><tr><th>字段</th><th>必填</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>作业名</td><td>是</td><td>用户可读标识</td></tr>
+          <tr><td>目标队列</td><td>是</td><td>来自 FR-01 的可用队列</td></tr>
+          <tr><td>资源需求</td><td>是</td><td>核数 / 内存 / GPU 数 / 预计时长</td></tr>
+          <tr><td>启动命令</td><td>是</td><td>待执行的命令行</td></tr>
+          <tr><td>所属账户</td><td>是</td><td>决定计量归属，默认取用户主账户</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </dd>
+    <dt>异常</dt>
+    <dd>提交过程中调度器超时：平台不得重复投递；应标记为「提交失败」并允许用户一键重试，重试前需确认原作业确未在调度器侧创建。<span class="chip asm">假设</span> 调度器支持幂等标识或可按名称回查。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr03">
+  <h3><span class="id">FR-03</span> 作业监控与日志 <span class="chip p0">P0</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>用户不必登录集群即可判断作业进展与结果。</dd>
+    <dt>触发</dt>
+    <dd>用户从「我的作业」列表进入详情。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>列表支持按状态、队列、时间范围筛选；状态取自调度器，平台不做二次推断。</li>
+        <li>详情展示：当前状态、提交 / 开始 / 结束时间、资源分配结果、退出码、标准输出与标准错误。</li>
+        <li>日志来源为调度器输出文件 <span class="chip asm">假设</span> 平台可读取调度器的输出路径。</li>
+        <li>列表与详情的刷新频率、日志的截断上限：<span class="chip tbd">TBD</span>。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>只读，不改变作业状态。</dd>
+    <dt>权限</dt>
+    <dd>普通用户仅见自己的作业；账户负责人可见本账户全部；成本管理员与平台管理员可见全部。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr04">
+  <h3><span class="id">FR-04</span> 作业操作：取消与重跑 <span class="chip p1">P1</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>支持对提交错误的作业及时止损与重试。</dd>
+    <dt>触发</dt>
+    <dd>用户在作业详情页选择「取消」或「重跑」。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li><b>取消</b>：仅「排队中 / 运行中」可取消，需二次确认；取消后状态为「已取消」终态。</li>
+        <li><b>取消的计量边界</b>：已消耗的资源仍计入用量（见 <a href="#fr06">FR-06</a>），不做免除。</li>
+        <li><b>重跑</b>：以原参数创建一个<b>新作业</b>，原作业记录保留不变；重跑同样受配额校验。</li>
+      </ul>
+    </dd>
+    <dt>异常</dt>
+    <dd>调度器取消失败（作业已结束）：以调度器实际状态为准刷新为终态，并提示用户。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr05">
+  <h3><span class="id">FR-05</span> 配额管理 <span class="chip p0">P0</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>把「谁能用多少」从口头约定变成系统约束，并在超限时提前拦住。</dd>
+    <dt>触发</dt>
+    <dd>账户负责人（或平台管理员）为账户设置 / 调整配额。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>配额维度至少包含：核时、GPU 时、并发作业数。各维度上限值与统计周期 <span class="chip tbd">TBD</span>。</li>
+        <li>校验时机为<b>提交时</b>（前置拦截），而非运行中中断。</li>
+        <li>额度是否在账户内按成员再分配：<span class="chip tbd">TBD</span>。</li>
+        <li>超限后的行为（拒绝提交 / 允许排队但不启动 / 允许超用并记账）三选一：<span class="chip tbd">TBD</span>。<b>本 PRD 的 P0 主线按「拒绝提交」编写</b>，若改为其他策略需同步修订 FR-02 的校验规则。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>配额变更即时生效；账户页展示各维度的已用 / 上限 / 剩余，并提供可解释的剩余量。</dd>
+    <dt>异常</dt>
+    <dd>调低配额至低于当前已用量：允许保存，但需明确提示「已超用」，且在该周期内不允许新提交。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr06">
+  <h3><span class="id">FR-06</span> 用量计量 <span class="chip p0">P0</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>把作业的实际消耗变成可归属、可复算的数据，这是成本核算的唯一数据源。</dd>
+    <dt>触发</dt>
+    <dd>作业进入终态后由平台采集。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>以<b>作业</b>为最小计量单位，记录资源维度与数量。<span class="chip asm">假设</span> 调度器提供作业级用量（如核时、GPU 时）。</li>
+        <li>计量起止点：从作业实际开始运行到结束；排队时长是否计入 <span class="chip tbd">TBD</span>。</li>
+        <li>取整规则（按分钟 / 按小时向上取整等）<span class="chip tbd">TBD</span>。<b>该规则必须在定价之前定稿</b>，否则账单金额无法复算。</li>
+        <li>是否计量存储占用（作业输出落盘量）<span class="chip tbd">TBD</span>。</li>
+        <li>用量记录一经生成不可修改；确有错误只能通过「调整项」冲正（见 FR-08）。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>生成该作业的用量记录，并计入所属账户当期账单草稿。</dd>
+    <dt>异常</dt>
+    <dd>计量数据缺失（调度器未返回或作业被强制清理）→ 该作业标记「用量待补」，进入待处理列表并通知成本管理员；<b>在其补齐前，当期账单不得关账</b>。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr07">
+  <h3><span class="id">FR-07</span> 定价管理 <span class="chip p1">P1</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>用可维护的费率表把用量折算为内部成本，支持费率变化可追溯。</dd>
+    <dt>触发</dt>
+    <dd>成本管理员新增或调整单价规则。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>单价规则由「适用维度 + 适用队列 + 单价 + 生效区间」构成；同一维度同一队列在同一时间只能有一条生效规则。</li>
+        <li>费率变更<b>只影响生效区间之后产生的用量</b>，不回算历史账单。</li>
+        <li>是否需要阶梯价 / 折扣 / 不同队列差异化费率：<span class="chip tbd">TBD</span>。P0 按「一维度一费率」编写。</li>
+        <li>单价数值由业务提供，本文不写具体数字。</li>
+      </ul>
+    </dd>
+    <dt>异常</dt>
+    <dd>某维度尚无生效费率时产生用量 → 该部分用量标记「未定价」，不得以 0 计入账单；并在出账前提示成本管理员补齐。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr08">
+  <h3><span class="id">FR-08</span> 账单与对账 <span class="chip p1">P1</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>把用量沉淀为可核对、可追溯、可申诉的周期性成本结果。</dd>
+    <dt>触发</dt>
+    <dd>账期结束由系统出账；或账户负责人提出异议。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>账单按「账户 × 账期」生成，包含各维度用量、适用费率、金额小计，并可下钻到具体作业。</li>
+        <li>出账后金额固化；此后产生的用量计入下一账期。</li>
+        <li>异议流程：账户负责人发起 → 成本管理员处理 → 以「调整单」形式冲正或补记 → 关账。调整必须留痕（谁、何时、为什么）。</li>
+        <li>因<b>内部成本核算</b>定位，本期不涉及付款、发票、催收；「欠费停服」能力不做。</li>
+      </ul>
+    </dd>
+    <dt>异常</dt>
+    <dd>存在「用量待补」或「未定价」记录时，账单不得关账，只可停留在草稿 / 有异议状态。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr09">
+  <h3><span class="id">FR-09</span> 用量与成本报表 <span class="chip p1">P1</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>让账户负责人与成本管理员能按维度查看趋势并导出。</dd>
+    <dt>触发</dt>
+    <dd>用户打开报表页或执行导出。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <ul>
+        <li>可按账户、队列、时间范围、资源维度聚合查看用量与成本。</li>
+        <li>导出格式 <span class="chip tbd">TBD</span>（CSV / Excel）。</li>
+        <li>可见范围遵循 <a href="#s5">第 5 节</a> 的权限矩阵。</li>
+      </ul>
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>纯只读，不改变任何业务状态；导出动作需记入审计。</dd>
+  </dl>
+</div>
+
+<div class="fr" id="fr10">
+  <h3><span class="id">FR-10</span> 通知与审计 <span class="chip p1">P1</span></h3>
+  <dl>
+    <dt>目的</dt>
+    <dd>让关键事件可被及时感知、关键动作可被追溯。</dd>
+    <dt>触发</dt>
+    <dd>由系统事件驱动（作业终态、配额告警、出账、用量待补），无用户手动触发入口。</dd>
+    <dt>处理规则</dt>
+    <dd>
+      <b>通知</b>至少覆盖：作业终态、配额接近上限、账单出账、用量待补需人工处理。渠道（站内 / 邮件）与频率 <span class="chip tbd">TBD</span>。
+      <br/>
+      <b>审计</b>至少记录：配额调整、费率变更、账单调整、集群凭据变更。审计记录需包含操作者、时间、变更前后值与原因，且不可被业务角色删除。
+    </dd>
+    <dt>结果与状态变化</dt>
+    <dd>通知产生送达记录（成功 / 失败），失败需可重发；审计记录生成后只可追加、不可修改或删除。</dd>
+  </dl>
+</div>
+
+<h2 id="s5">5. 共享规则与异常</h2>
+
+<h3>5.1 权限矩阵</h3>
+<table>
+  <thead>
+    <tr><th>操作</th><th>平台管理员</th><th>成本管理员</th><th>账户负责人</th><th>普通用户</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>接入 / 修改集群与队列</td><td>✔</td><td>—</td><td>—</td><td>—</td></tr>
+    <tr><td>提交作业</td><td>✔</td><td>—</td><td>✔</td><td>✔</td></tr>
+    <tr><td>查看他人作业详情</td><td>✔</td><td>✔（只读）</td><td>本账户内 ✔</td><td>仅自己</td></tr>
+    <tr><td>取消 / 重跑作业</td><td>✔</td><td>—</td><td>本账户内 ✔</td><td>仅自己</td></tr>
+    <tr><td>设置账户配额</td><td>✔</td><td>—</td><td>本账户内 ✔</td><td>—</td></tr>
+    <tr><td>维护单价</td><td>✔</td><td>✔</td><td>—</td><td>—</td></tr>
+    <tr><td>出账 / 调整账单</td><td>✔</td><td>✔</td><td>—</td><td>—</td></tr>
+    <tr><td>查看账单</td><td>全部</td><td>全部</td><td>本账户</td><td>本账户（仅汇总）</td></tr>
+    <tr><td>补录用量的处理</td><td>✔</td><td>✔</td><td>—</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<h3>5.2 计量与计费口径（唯一口径）</h3>
+<p>为避免同一条规则在多处重复定义，以下口径为全平台唯一来源，各 FR 引用而非重述：</p>
+<ol>
+  <li><b>计量对象</b>：作业级用量；账户是唯一归属单元。</li>
+  <li><b>计量时点</b>：作业进入终态后采集；采集到的记录不可变更。</li>
+  <li><b>折算</b>：金额 = 用量 × 对应维度生效单价；同一维度同一队列同一时间仅一条生效费率。</li>
+  <li><b>未定价用量</b>：不得按 0 计入，必须阻断关账。</li>
+  <li><b>更正方式</b>：仅允许通过调整单冲正，禁止直接改历史记录。</li>
+</ol>
+
+<h3>5.3 关键异常与恢复</h3>
+<table>
+  <thead>
+    <tr><th>异常</th><th>系统行为</th><th>用户可执行的恢复动作</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>配额不足</td><td>拒绝提交，不落作业</td><td>调整资源需求，或联系账户负责人提额</td></tr>
+    <tr><td>调度器不可达</td><td>该集群队列从提交列表移除</td><td>选择其他集群，或稍后重试</td></tr>
+    <tr><td>提交超时</td><td>标记「提交失败」，不重复投递</td><td>确认后一键重跑</td></tr>
+    <tr><td>计量缺失</td><td>作业标记「用量待补」，阻断关账</td><td>成本管理员补录</td></tr>
+    <tr><td>费率缺失</td><td>用量标记「未定价」，阻断关账</td><td>成本管理员补配单价</td></tr>
+    <tr><td>账单有异议</td><td>账单转「有异议」</td><td>账户负责人补充说明，等待调整后关账</td></tr>
+  </tbody>
+</table>
+
+<h3>5.4 通知时机与对象</h3>
+<table>
+  <thead><tr><th>事件</th><th>通知对象</th><th>时机</th></tr></thead>
+  <tbody>
+    <tr><td>作业到达终态</td><td>提交者</td><td>状态变更时</td></tr>
+    <tr><td>配额接近上限</td><td>提交者、账户负责人</td><td>阈值 <span class="chip tbd">TBD</span></td></tr>
+    <tr><td>账单出账</td><td>账户负责人</td><td>出账后</td></tr>
+    <tr><td>用量待补 / 未定价</td><td>成本管理员</td><td>发生即通知</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s6">6. 未决问题</h2>
+<p>以下为会实质影响权限、金额或核心流程的未决项，需业务侧给出决定后本文档才能定稿。</p>
+<table>
+  <thead>
+    <tr><th>#</th><th>问题</th><th>影响</th><th>倾向 / 备注</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Q1</td><td>超配额的行为：拒绝提交 / 允许排队 / 允许超用记账？</td><td>直接改变 FR-02、FR-05 的校验规则</td><td>本文按「拒绝提交」编写</td></tr>
+    <tr><td>Q2</td><td>计量取整规则（按分钟 / 按小时、是否向上取整）</td><td>决定账单金额能否复算，必须先于定价定稿</td><td>—</td></tr>
+    <tr><td>Q3</td><td>账期长度与出账时点</td><td>影响 FR-08 与通知节奏</td><td>—</td></tr>
+    <tr><td>Q4</td><td>是否计量存储占用</td><td>决定计量维度与定价维度数量</td><td>—</td></tr>
+    <tr><td>Q5</td><td>配额是否在账户内按成员再分配</td><td>影响 FR-05 的模型与页面</td><td>—</td></tr>
+    <tr><td>Q6</td><td>四类角色与 M1 已有 <code>admin</code>/<code>user</code> 的映射关系</td><td>影响权限矩阵落地与迁移</td><td>—</td></tr>
+    <tr><td>Q7</td><td>费率是否需要阶梯 / 折扣 / 队列差异化</td><td>影响 FR-07 的规则复杂度</td><td>P0 按单一费率</td></tr>
+    <tr><td>Q8</td><td>报表导出格式</td><td>影响 FR-09</td><td>—</td></tr>
+    <tr><td>Q9</td><td>作业列表刷新频率与日志截断上限</td><td>影响 FR-03 的可用性</td><td>—</td></tr>
+    <tr><td>Q10</td><td>通知渠道与频率</td><td>影响 FR-10</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <b>标注约定</b>：<span class="chip tbd">TBD</span> 表示需业务决策的空白项；
+  <span class="chip asm">假设</span> 表示本文为继续推进而做的推断，需确认；
+  <span class="chip p0">P0</span> / <span class="chip p1">P1</span> 为优先级。
+</div>
+
+</main>
+</div>
+</div>
+</body>
+</html>

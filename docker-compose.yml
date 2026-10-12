@@ -38,6 +38,8 @@ services:
   api:
     build:
       context: ./apps/api
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     env_file:
       - path: .env
         required: false
@@ -74,10 +76,11 @@ services:
     build:
       context: ./apps/web
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-}
       # Only used by next.config.mjs rewrites when :3000 is hit directly
       # (through Caddy, /api never reaches the web container).
       API_PROXY_TARGET: http://api:8000

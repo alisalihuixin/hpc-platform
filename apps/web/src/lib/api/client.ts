@@ -19,7 +19,10 @@ import type {
   UserRead,
 } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '/api';
+// Origin of the API. Empty means same-origin: the generated OpenAPI paths
+// already carry the `/api/v1` prefix (Caddy routes `/api/*` to the backend),
+// so adding a base path here would double it.
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 const ACCESS_TOKEN_KEY = 'hpc.access_token';
 const REFRESH_TOKEN_KEY = 'hpc.refresh_token';

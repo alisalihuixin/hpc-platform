@@ -63,7 +63,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          NEXT_PUBLIC_API_BASE_URL: /api
+          NEXT_PUBLIC_API_BASE_URL: ''
 
   docker:
     name: Docker compose config

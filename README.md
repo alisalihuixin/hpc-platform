@@ -108,7 +108,8 @@ hpc-platform/
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
-| 镜像构建时长 / 体积 | — | 待测 | 本机未装 Docker |
+| 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
+| 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |
 | 测试覆盖率 | ≥ 80% | 待接入 coverage | 尚未接入 pytest-cov |
 
 > 未实测项保持「待测」占位，不做估算。
@@ -140,10 +141,10 @@ hpc-platform/
 
 | # | 验收项 | 结论 |
 | --- | --- | --- |
-| 1 | `compose up` 后两角色登录 | ⏳ 待在有 Docker 的环境执行（本机未装 Docker）；登录逻辑已由单测覆盖 |
-| 2 | 越权返回 403 | ✅ 单测覆盖（user 访问 `/api/v1/users` → 403） |
-| 3 | 限流生效 | ✅ 单测覆盖：窗口内放行 5 次，第 6 次 `429` + `Retry-After` |
-| 4 | 登出后旧 token 失效 | ✅ 单测覆盖（登出后 `/auth/me` → 401；refresh 亦失效） |
+| 1 | `compose up` 后两角色登录 | ✅ Docker Desktop 29.8.2 实测：浏览器 UI 用 admin 登录 → 进入 `/dashboard`，`login` / `me` 均 `200` |
+| 2 | 越权返回 403 | ✅ 单测 + compose 实测（user → `/api/v1/users` 返回 `403`，admin 返回 `200`） |
+| 3 | 限流生效 | ✅ 单测 + compose 实测：前 5 次 `401`，第 6 次 `429`（`Retry-After: 59s`） |
+| 4 | 登出后旧 token 失效 | ✅ 单测 + compose 实测（`/auth/me` `200` → logout `200` → 同 token `/auth/me` `401`） |
 
 **关键实现**
 
@@ -177,6 +178,10 @@ make migrate   # 应用数据库迁移（容器启动时也会自动执行）
 make seed      # 创建演示账号
 ```
 
+> 构建镜像时若 npm / PyPI 拉取慢或被墙，可在 `.env` 覆盖构建源（默认指向官方源，仓库保持可移植）：
+> `NPM_REGISTRY=https://registry.npmmirror.com`、`PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple`
+> （Docker 拉基础镜像慢可另在 `~/.docker/daemon.json` 配 `registry-mirrors`。）
+
 访问：
 
 | 入口 | 地址 |
@@ -197,20 +202,43 @@ make seed      # 创建演示账号
 
 ### 本地开发（不用 Docker）
 
-```bash
-# 后端
-cd apps/api
-python -m venv .venv && . .venv/Scripts/activate      # Windows
-pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.main:app --reload
+推荐做法：**基础设施仍用 Docker，后端与前端在本机手动跑** —— 依赖版本与生产一致，前端又有热更新。
 
-# 前端
+> 手动起之前必须先腾端口：容器版全栈会占用 8000 / 3000 / 80。
+
+```powershell
+# 0) 只保留基础设施，释放 8000 / 3000 / 80
+docker compose stop api web caddy
+docker compose up -d postgres redis
+
+# 1) 后端（新开一个终端）
+cd apps/api
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1     # 被执行策略拦则先跑 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+pip install -e ".[dev]"
+alembic upgrade head             # 幂等：已到 head 会提示 already up to date
+python -m app.initial_data       # 幂等：重复执行不会重复建账号
+uvicorn app.main:app --reload --port 8000
+
+# 2) 前端（再开一个终端）
 cd apps/web
 npm install
-cp .env.local.example .env.local
-npm run dev        # /api 由 next.config.mjs 的 rewrite 转发到 :8000
+Copy-Item .env.local.example .env.local
+npm run dev                      # :3000；/api/** 由 next.config.mjs 的 rewrite 转发到 :8000
 ```
+
+访问 <http://localhost:3000>（手动跑时**不需要** Caddy）；API 文档在 <http://localhost:8000/docs>。
+
+> 不想激活 venv 的话，把上面的 `pip` / `alembic` / `python` / `uvicorn` 换成 `.\.venv\Scripts\python.exe -m <命令>` 即可。
+
+**注意事项**
+
+| 事项 | 说明 |
+| --- | --- |
+| `.env` 的查找位置 | [`config.py`](apps/api/app/core/config.py) 的 `env_file=".env"` 相对**运行目录**解析。在 `apps/api` 下运行且该目录无 `.env` 时全用代码默认值（`hpc/hpc/hpc@localhost:5432`、`redis://localhost:6379/0`），恰好与 Docker 起的基础设施一致，可直接跑。要沿用仓库根 `.env` 的自定义值：`Copy-Item ..\..\.env .env`。 |
+| JWT 密钥不一致 | 本地与容器两条路 `JWT_SECRET_KEY` 不同时，切换后旧 token 立即失效（401），属预期而非缺陷。 |
+| 端口冲突 | 不先 `stop` 会报 `[Errno 10048]`。若想与容器并存：后端换 `--port 8001`，并把 `apps/web/.env.local` 的 `API_PROXY_TARGET` 改为 `http://localhost:8001`。 |
+| Python 版本 | `requires-python>=3.11`；若 `pip install` 报缺 wheel 或需要编译，改用 3.12 建 venv。 |
 
 ---
 

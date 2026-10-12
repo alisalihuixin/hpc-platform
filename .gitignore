@@ -36,3 +36,6 @@ Thumbs.db
 
 # ---- Docker local volumes ----
 deploy/data/
+
+# ---- Tooling artifacts ----
+.trae-html-share-packages/

@@ -14,7 +14,9 @@ RUN apt-get update \
 
 # Install dependencies + package first so the layer is cached across code changes.
 COPY pyproject.toml ./
-RUN pip install --upgrade pip && pip install .
+ARG PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --upgrade pip --index-url "$PIP_INDEX_URL" \
+    && pip install --index-url "$PIP_INDEX_URL" .
 
 COPY . .
 

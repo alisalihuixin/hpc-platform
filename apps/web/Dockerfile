@@ -1,13 +1,14 @@
 # ---- deps ----
 FROM node:20-alpine AS deps
 WORKDIR /app
+ARG NPM_REGISTRY=https://registry.npmjs.org
 COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+RUN npm config set registry "$NPM_REGISTRY" && (npm ci || npm install)
 
 # ---- build ----
 FROM node:20-alpine AS builder
 WORKDIR /app
-ARG NEXT_PUBLIC_API_BASE_URL=/api
+ARG NEXT_PUBLIC_API_BASE_URL=
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
