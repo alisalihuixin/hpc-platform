@@ -1,0 +1,134 @@
+# 项目① HPC 作业调度与计费管理平台 · 开发计划（逐日任务分解）
+
+> 版本：v1.0 ｜ 2026-10-13
+> 依据：`docs/项目①需求文档_HPC作业调度与计费管理平台.md`（PRD v1.0）
+> 排期口径：单人力，1 天 = 1 个工作日（5 天/周），共 8 周 / **D1–D40**
+> 里程碑映射沿用 PRD 第 8 节：M1(W1–W2) / M2(W3–W5) / M3(W6–W7) / M4(W8)
+
+---
+
+## 0. 总览
+
+| 里程碑 | 周次 | 天次 | 覆盖模块 | 验收（DoD 汇总） |
+|---|---|---|---|---|
+| M1 骨架 + 认证 | W1–W2 | D1–D10 | F1 全部、F8.3、工程骨架 | 两角色登录、越权 403、限流生效、登出失效 |
+| M2 资源/配额/作业/计量 | W3–W5 | D11–D25 | F2、F3、F4(除 SSE)、F5 | 全链路跑通 + 20 并发不超扣测试绿 |
+| M3 SSE + 管理页 | W6–W7 | D26–D35 | F4.7、F2.3 前端、管理页(F2.2/F3.4/F8.1/F8.2) | 双浏览器秒级刷新、管理页可用 |
+| M4 报表 + 审计 + 上线 | W8 | D36–D40 | F6、F7 + README + 上线 | 报表可见、审计全覆盖、metrics.md 数据齐 |
+
+> **M1 状态**：骨架与认证已交付（对齐现有提交「M1 骨架与认证」）。下表 M1 保留为**复核清单**，用于核对实现与 PRD 的差距（例：PRD F1.4 要求滑窗 5 次/**5 分钟**，现实现为 5 次/**60 秒**，需按 PRD 对齐）。
+
+---
+
+## 1. M1：骨架 + 认证（D1–D10）
+
+| Day | 任务 | 产出物 | 完成标志 |
+|---|---|---|---|
+| D1 | 仓库骨架：monorepo、`docker-compose.yml`、`Makefile`、`deploy/Caddyfile`、CI 工作流 | 可 `make up` 起 api/pg/redis/web/caddy | compose config 校验通过 |
+| D2 | FastAPI 应用工厂 + `core/config`(pydantic-settings) + `db`(异步引擎/Base/get_db) | 应用启动、DB 连接池就绪 | `/healthz` 返回 200 |
+| D3 | 模型 `users`/`roles` + Alembic 初始迁移 + `make seed` 种子账号 | 迁移 upgrade/downgrade 双向可用 | 种子 admin/user 落库 |
+| D4 | 安全模块：bcrypt 加盐、JWT 签发/验签（access 30m + refresh 7d） | `core/security.py` | 单测：签发→验签→过期失败 |
+| D5 | Redis 客户端 + 登录限流（ZSET 滑动窗口） | `core/rate_limit.py` | 连点第 6 次返回 429 + retry_after |
+| D6 | JWT 黑名单 + 登出/刷新轮换 | `core/blacklist.py`、refresh 轮换 | 登出后旧 token 401；旧 refresh 重放失效 |
+| D7 | auth 路由（login/refresh/logout/me）+ RBAC 依赖注入 `require_role` | `routers/auth.py`、`deps` | user 访问管理接口 403（非 401） |
+| D8 | F8.3 健康检查（API+DB+Redis 探活）+ 统一错误/响应格式 | `/healthz`（Redis 断开→503） | 断 Redis 探活 503 |
+| D9 | pytest：登录/限流/黑名单/RBAC（SQLite + fakeredis） | `tests/` 全绿 | 24 passed，无需外部依赖 |
+| D10 | 前端登录页 + layout 壳 + openapi-typescript 生成 client | `/login` 可登录跳转 `/dashboard` | 浏览器实测登录 200、`me` 200 |
+
+**M1 收口**：对照 PRD F1.4 限流窗口（5min）修正；确认 F1.5 越权 403 用例入库。
+
+---
+
+## 2. M2：资源 / 配额 / 作业 / 计量（D11–D25）
+
+| Day | 任务 | 产出物 | 完成标志 |
+|---|---|---|---|
+| D11 | F2.1 节点模型（`nodes`：hostname/CPU/GPU/内存/状态/tags JSONB）+ 迁移；F2.2 节点 CRUD（admin） | 节点表 + `/api/v1/nodes` 增删改查 | 表结构符合 ERD |
+| D12 | F2.2 上下线（online/offline/draining）；F2.3 资源视图（用户只读 + 实时空闲卡数） | 下线/上线接口 + 只读列表接口 | 下线后新作业不分配到该节点 |
+| D13 | F3.1 配额模型（`quotas`）+ `groups` 模型与迁移；F8.2 组模型基础 | 组 × 资源维度配额表 | 一组一条配额记录 |
+| D14 | **F3.2 配额扣减（防超卖核心）**：`UPDATE quotas SET used=used+? WHERE id=? AND limit-used>=? RETURNING` | `services/quota.py` + 提交时同事务预扣 | rowcount=0 即拒绝（409） |
+| D15 | **F3.2 并发测试**：`asyncio.gather` 20 并发提交，断言总预扣 ≤ 限额 | `tests/test_quota_concurrency.py` | 20 并发无一超扣，入 CI 常驻 |
+| D16 | F3.3 配额返还（终态按未消耗返还）；F3.4 配额管理（admin 调整）；F3.5 配额查询（本组余量） | 返还逻辑 + `/quotas/me`、`/quotas/{group_id}` | 取消运行中作业：已消耗照扣、剩余返还 |
+| D17 | F4.1 作业模型（`jobs` 状态机、params JSONB、排队序号）+ 索引 + 迁移 | 状态机 CHECK + `(status,queued_at)`/`(user_id,created_at)` 索引 | 状态流转受 CHECK 约束 |
+| D18 | F4.2 作业提交：Pydantic 校验(`Field(le=...)`) → 配额预扣 → 入队（同事务） | `POST /api/v1/jobs` | 超上限 422（字段级）；配额不足 409 |
+| D19 | F4.4 取消作业（`UPDATE ... WHERE status IN ('Queued','Running') RETURNING`）；F4.5 列表（分页/筛选/权限） | `/jobs/{id}/cancel`、`GET /jobs` | 终态取消 409；user 仅见自己 |
+| D20 | F4.6 作业详情（状态/资源/起止/消耗卡时/日志 mock） | `GET /jobs/{id}` | 详情字段齐全，仅本人/admin |
+| D21 | F4.3 模拟调度器：worker 扫描 Queued → 按空闲+配额+FIFO 分配 → Running（记 start_time） | ARQ/APScheduler worker | 提交后秒级进 Running |
+| D22 | F4.3 结束流转（walltime/故障率 → Failed/Completed）+ 写 `usage_events` | 调度器计费落库 | 结束自动产生流水 |
+| D23 | F5.1 流水模型（`usage_events` 只增不改、reversal 冲正）；F5.2 计费规则（卡时=GPU×分钟向上取整，费率快照） | 流水表 + 计费函数 | 手算 3 case 与系统一致 |
+| D24 | F5.3 个人用量（按时间段查明细）；F5.4 组用量排行 | `/usage/me`、`/usage/groups/{id}` | 明细合计 = 汇总值 |
+| D25 | M2 前端：作业列表/提交/详情、节点列表、用量页；前后端联调回归 | `/jobs`、`/jobs/new`、`/jobs/[id]`、`/nodes`、`/usage` | 全链路跑通 + 20 并发测试绿 |
+
+**M2 收口**：F3.2 并发用例 + F4 状态机乐观锁用例进 CI；禁止读-改-写。
+
+---
+
+## 3. M3：SSE 实时 + 管理页（D26–D35）
+
+| Day | 任务 | 产出物 | 完成标志 |
+|---|---|---|---|
+| D26 | F4.7 后端：作业状态变更经 Redis Pub/Sub 扇出 + `GET /jobs/stream`(SSE) | SSE 端点 + 发布点 | 单浏览器可收到推送 |
+| D27 | F4.7 前端：SSE 接入 + 收到事件即 `invalidateQueries` | 作业列表实时刷新 | 无手动刷新即更新 |
+| D28 | F4.7 双浏览器验收；F2.3 节点列表页（只读表格 + GPU 占用条） | `/nodes` 页面 | 两浏览器 ≤2s 同步 |
+| D29 | 管理-节点页 `/admin/nodes`（F2.2：CRUD + 上下线） | 管理节点页 | 下线后不再接收新作业 |
+| D30 | 管理-配额页 `/admin/quotas`（F3.4：组配额编辑） | 管理配额页 | 调低配额不杀在跑作业 |
+| D31 | F8.1 用户管理：admin 建用户/分配角色/重置密码 + `/admin/users` 页 | 用户管理接口 + 页面 | 新用户可登录且角色生效 |
+| D32 | F8.2 用户组管理：组增删改/成员维护 + `/admin/groups` 页 | 组管理接口 + 页面 | 绑配额后组不可硬删 |
+| D33 | 前端统一：shadcn/ui + TanStack Query 规范、Data Table/状态徽标/表单校验同规则 | 组件与样式统一 | 视觉/交互一致性通过 |
+| D34 | M2+M3 联调回归：越权、边界、状态机、配额边界用例 | 回归清单 | 关键用例全绿 |
+| D35 | M3 验收 + 缓冲 | 验收记录 | 双浏览器秒级刷新达成 |
+
+---
+
+## 4. M4：报表 + 审计 + 上线（D36–D40）
+
+| Day | 任务 | 产出物 | 完成标志 |
+|---|---|---|---|
+| D36 | F6.1 月结物化视图 `mv_monthly_billing`（月×用户×组×卡时）+ 定时 `REFRESH CONCURRENTLY` | 物化视图 + 定时任务 | 流水插入 ≤1h 报表可见，刷新不锁表 |
+| D37 | F6.2 报表接口 `/reports/monthly`、`/reports/dashboard` | 报表聚合接口 | 数据与流水对账一致 |
+| D38 | F7.1 审计触发器（users/quotas/nodes/jobs 的 UPDATE/DELETE→`audit_log`）；F7.2 操作人注入中间件 `SET LOCAL app.user`；F7.3 审计查询接口 | 触发器 + 中间件 + `/audit-logs` | 改字段即留痕，操作人=登录人 |
+| D39 | F6.2 前端看板（ECharts：卡时趋势/队列占用/热力图/TOP）；F7.3 前端审计页 `/admin/audit` | `/admin/reports`、`/admin/audit` 页 | 看板加载 <2s；审计筛选可用 |
+| D40 | F6.3 慢查询优化（复合索引/改写）+ 种子 1 万作业 + 压测 p95<200ms；README、metrics.md、demo 视频、上线 | 优化前后对比 + demo + 线上地址 | metrics.md 有前后数字；线上可访问 |
+
+**M4 收口**：非功能需求核对——并发正确性(CI)、性能(p95<200ms)、安全、审计 100% 覆盖、可观测、一键部署。
+
+---
+
+## 5. 关键路径与依赖
+
+```
+D11 节点模型 ─┐
+D13 组/配额模型 ─┴─> D14 配额扣减(防超卖) ─> D18 作业提交 ─> D21/22 调度器+计费
+                                                    │
+D23 流水模型 ───────────────────────────────────────┘
+                                                    │
+D26 SSE ─> D27 前端实时          D36 物化视图 ─> D37 报表接口 ─> D39 看板
+D38 审计触发器/中间件 ─> D39 审计页 ─┐
+D17 作业模型 ───────────────────────┴─> D19/D20 列表/详情 ─> D25 前端联调
+```
+
+- **不可砍（业务立身）**：F3.2 防超卖、F5 计费流水、F7.1 审计。
+- **可延期先砍**：F4.6 日志、F6.2 热力图、分片上传。
+
+---
+
+## 6. 每日 DoD（完成定义）
+
+每条任务收口须满足：
+
+1. 代码合入 + 迁移（若有）upgrade/downgrade 双向可用；
+2. 对应验收标准（PRD 表格）逐条自测通过；
+3. 新增逻辑有 pytest 覆盖（并发/状态机类必测）；
+4. `ruff check/format`、`next build` 全绿；
+5. 涉及指标的场景，实测数字写入 `metrics.md`，未测保持占位、不得编造。
+
+---
+
+## 7. 风险与缓冲
+
+| 风险 | 影响 | 应对 |
+|---|---|---|
+| 配额并发正确性 | 超卖 → 业务不可信 | D15 用例先行、CI 常驻；必要时 PG 行锁兜底 |
+| 调度器多实例抢占 | 重复调度 | 单实例先行；多实例用 PG advisory lock（D22 备注） |
+| 物化视图刷新锁表 | 报表阻塞业务 | 强约束用 `REFRESH CONCURRENTLY` |
+| M4 单周偏紧 | 报表/审计/上线挤在 5 天 | D35 缓冲压到 M3 联调；F6.2 热力图列为可砍项 |

@@ -2,11 +2,12 @@
 
 from fastapi import APIRouter
 
-from app.routers import auth, health, users
+from app.routers import auth, health, nodes, users
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
 api_router.include_router(users.router)
+api_router.include_router(nodes.router)
 
 health_router = health.router
 
