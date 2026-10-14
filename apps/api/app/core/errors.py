@@ -6,6 +6,8 @@ framework-agnostic; ``register_exception_handlers`` translates them to HTTP.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
@@ -36,6 +38,20 @@ class ConflictError(AppError):
     status_code = status.HTTP_409_CONFLICT
 
 
+class UnprocessableEntityError(AppError):
+    """422 carrying per-field errors in the same shape as FastAPI's own.
+
+    Used when a value is only invalid in context (e.g. ``num_gpus`` exceeds the
+    *group's* ``max_gpus_per_job``, which is unknown to the static schema).
+    """
+
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    def __init__(self, errors: list[dict[str, Any]]) -> None:
+        super().__init__("Validation failed")
+        self.errors = errors
+
+
 class RateLimitError(AppError):
     status_code = status.HTTP_429_TOO_MANY_REQUESTS
 
@@ -52,8 +68,13 @@ def register_exception_handlers(app: FastAPI) -> None:
             headers["Retry-After"] = str(max(exc.retry_after, 1))
         if isinstance(exc, AuthenticationError):
             headers["WWW-Authenticate"] = "Bearer"
+        content: dict[str, Any] = {"detail": exc.detail}
+        if isinstance(exc, UnprocessableEntityError):
+            # Mirror FastAPI's request-validation body so clients parse 422 the
+            # same way whether the error came from the schema or the service.
+            content = {"detail": exc.errors}
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": exc.detail},
+            content=content,
             headers=headers,
         )

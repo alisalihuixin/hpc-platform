@@ -11,15 +11,11 @@ import enum
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
-
-# JSONB on PostgreSQL (indexable, per the ERD) with a JSON fallback so the same
-# metadata also builds under the SQLite used by the test suite.
-JSONDict = JSONB().with_variant(JSON(), "sqlite")
+from app.db.types import JSONDict
 
 
 class NodeStatus(enum.StrEnum):

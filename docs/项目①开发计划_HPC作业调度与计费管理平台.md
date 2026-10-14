@@ -132,3 +132,61 @@ D17 作业模型 ─────────────────────
 | 调度器多实例抢占 | 重复调度 | 单实例先行；多实例用 PG advisory lock（D22 备注） |
 | 物化视图刷新锁表 | 报表阻塞业务 | 强约束用 `REFRESH CONCURRENTLY` |
 | M4 单周偏紧 | 报表/审计/上线挤在 5 天 | D35 缓冲压到 M3 联调；F6.2 热力图列为可砍项 |
+
+---
+
+## 8. 进度记录（实际执行）
+
+> 逐日回填：完成日 / 实际产出 / 证据 / 与计划的差异。未实测的数字不写。
+
+### D11–D12 · F2 节点域 —— 已完成
+
+- **产出**：`app/models/node.py`、`app/schemas/node.py`、`app/services/node_service.py`、`app/routers/nodes.py`、`alembic/versions/0002_nodes.py`、`tests/test_nodes.py`
+- **接口**：`GET /nodes`、`GET /nodes/{id}`（登录可读，F2.3 只读资源视图，含 `gpu_free`）；`POST/PATCH/DELETE /nodes`（admin）
+- **证据**：pytest **34 passed**；ruff check/format 全过；`upgrade → downgrade base → upgrade` 在 SQLite 双向通过，`nodes` 表含 2 条 CHECK（status 枚举、`gpu_used<=gpu_total`）+ 2 个索引
+- **差异**：PRD 写 `PUT /nodes`，实现沿用项目既有约定 `PATCH`（与 `users.py` 一致）
+
+### D13–D15 · F3.1 / F3.2 配额模型 + 防超卖核心 —— 已完成
+
+- **产出**：`app/models/group.py`、`app/models/quota.py`、`app/db/types.py`（共享 `JSONDict`）、`app/db/base.py`（`user_groups`）、`alembic/versions/0003_groups_quotas.py`、`app/services/quota_service.py`、`tests/test_quota.py`；`app/initial_data.py` 种子新增 `default` 组 + 配额（gpu_limit=1000）
+- **证据**：pytest **43 passed**；**20 并发预扣恰好 10 次成功、`gpu_used=100` 且 `<= gpu_limit`，无超卖**；ruff 全过；迁移 `0002 → head → base → head` 通过
+- **差异 1**：D14（扣减）与 D15（并发测试）合并一次交付
+- **差异 2**：并发用例改用**文件库多连接**（conftest 的 in-memory SQLite 用 `StaticPool` 单连接，会串行化，测不出竞态）
+- **实现要点**：条件原子更新 `UPDATE quotas SET gpu_used = gpu_used + :n WHERE group_id = :g AND gpu_used + :n <= gpu_limit` + `rowcount` 判定；未采用 `SELECT ... FOR UPDATE` 或 `RETURNING`（前者需额外事务管理，后者跨库兼容性略差），DB 层 CHECK 约束兜底；`reserve` / `release` **不 commit**，由调用方保证「预扣 + 入队」同事务
+
+### D16 · F3.3 / F3.4 / F3.5 配额返还 + 管理 + 查询 —— 已完成
+
+- **产出**：`app/schemas/quota.py`、`app/routers/quotas.py`、`quota_service.list_user_quotas` / `update_quota`、`tests/test_quota_endpoints.py`
+- **接口**：`GET /quotas/me`（登录，我所属各 active 组余量）；`GET /quotas/{group_id}`、`PATCH /quotas/{group_id}`（admin）
+- **证据**：pytest **52 passed**；ruff 全过；OpenAPI 已生成 3 条新路径
+- **差异**：PRD 写 `PUT`，实现用 `PATCH`；新增规则 `gpu_limit` 不得低于已用 `gpu_used`（否则 409），保证 CHECK 不被应用层击穿
+
+### 计划偏差清单（待统一口径）
+
+| 项 | PRD | 当前实现 | 处置建议 |
+|---|---|---|---|
+| 节点/配额更新方法 | `PUT /nodes`、`PUT /quotas/{id}` | `PATCH`（与 `users` 一致） | 先保持内部一致，或统一改 `PUT` |
+| 健康检查路径 | `/healthz`（F8.3） | `/health`、`/health/ready` | 归入 M1 收口时对齐 |
+| 登录限流窗口 | 5 次 / **5 分钟**（F1.4） | 5 次 / **60 秒** | 归入 M1 收口时按 PRD 调整 |
+
+### D17 · F4.1 作业模型 + 状态机 + 索引 + 迁移 —— 已完成
+
+- **产出**：`app/models/job.py`（`Job` + `JobStatus` + `ALLOWED_TRANSITIONS` + `TERMINAL_STATUSES`）、`alembic/versions/0004_jobs.py`、`tests/test_job_model.py`
+- **表结构**：`user_id`/`group_id`（**不设 ON DELETE CASCADE**，作业是对账/审计证据必须留存）、`node_id`（`ON DELETE SET NULL`，删节点不影响账单真相）、`num_nodes`/`num_gpus`/`walltime_min`/`params` JSONB/`status`/`queued_at`/`started_at`/`ended_at`
+- **约束与索引**：CHECK `status IN (5 态)`、`num_nodes>0 AND num_gpus>=0`、`walltime_min>0`；索引 `(status, queued_at)`（喂调度器扫描）、`(user_id, created_at)`（喂用户作业历史）
+- **证据**：pytest **58 passed**；ruff 全过；迁移 `head → 0003 → head → base → head` 双向通过；`jobs` 含 3 条 CHECK + 4 个索引
+- **设计取舍**：「排队序号」不建列，按 `ORDER BY (queued_at, id)` 计算，避免额外的原子自增计数器；状态机用 `UPDATE ... WHERE status IN (...)` 乐观检查（D19 落地），禁止读-改-写
+
+### D18 · F4.2 作业提交（校验 → 配额预扣 → 入队同事务）—— 已完成
+
+- **产出**：`app/schemas/job.py`（`JobCreate`/`JobRead`/`JobList`）、`app/services/job_service.py`、`app/routers/jobs.py`、`tests/test_job_submit.py`；`app/core/errors.py` 新增 `UnprocessableEntityError`（422，携带字段级 `errors`，与 FastAPI 校验体同形）
+- **接口**：`POST /jobs`（登录，返回 201）
+- **执行顺序**：① 校验组存在且 active + 调用者是成员（`user_groups`，非成员 403、组不存在 404）→ ② 拉组配额，校验 `num_nodes ≤ max_nodes_per_job`、`num_gpus ≤ max_gpus_per_job`（越限 **422 字段级**）→ ③ `quota_service.reserve_or_raise`（原子条件更新，越限 **409**）→ ④ 建 `queued` 作业；**③④ 同一事务**（`reserve` 不 commit，`db.commit()` 一次性提交预扣 + 入队）
+- **证据**：pytest **67 passed**（新增 9 例）；ruff check/format 全过；无新迁移（复用 `0004_jobs`）
+- **用例**：匿名 401；成功 201 + `status=queued` + 配额 `gpu_used` 递增；`num_gpus=0`（CPU-only）不动配额；超组上限 422（断言 `loc=["body","num_gpus"]`/`["body","num_nodes"]`）；`walltime_min` 超静态上限 422；配额不足 409 且 **`gpu_used` 回滚、jobs 表 0 行**（原子性）；非成员 403；未知组 404
+- **设计取舍**：静态上限（`Field(le=…)`，如 `num_gpus ≤ 4096`、`walltime_min ≤ 一周`）与组级上限（依赖配额、动态）分两层校验——前者在 schema，后者在 service 抛 422 同形错误体，保证「超上限字段返回 422 及明确字段错误」这条验收同时覆盖两种来源
+
+### 下一步
+
+- D19 F4.4 取消作业 + F4.5 作业列表（分页/筛选/权限，user 仅见自己）
+
