@@ -13,6 +13,11 @@ async def ping(ctx: dict[str, Any], message: str = "pong") -> str:
 
 
 async def schedule_jobs(_ctx: dict[str, Any]) -> int:
-    """One scheduler pass, usable as a queued task or from the poll loop."""
+    """One scheduler cycle: start queued jobs, then finish running ones.
+
+    Returns how many jobs were started (the poll loop only logs failures).
+    """
     async with async_session_factory() as db:
-        return await scheduler_service.schedule_once(db)
+        started = await scheduler_service.schedule_once(db)
+        await scheduler_service.finish_due_jobs(db)
+        return started

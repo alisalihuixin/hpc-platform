@@ -215,7 +215,27 @@ D17 作业模型 ─────────────────────
 - **用例**：有容量即启动并占卡；容量不足保持 queued；offline/draining 节点跳过；FIFO 先到先得；优先最空闲节点；节点被填满后第 3 个作业继续排队；二次调度不重复启动（`started_at`/`gpu_used` 不变）；`num_gpus=0` 的 CPU-only 作业可落节点且不占卡
 - **计划偏差**：MVP 每个作业只落到**单个节点**（`jobs` 仅有一个 `node_id`），`num_nodes` 先作为请求参数保留；D22 结束时可按该 `node_id` 精确释放节点卡
 
+### D22 · F4.3 结束流转 + usage_events —— 已完成
+
+- **产出**：`app/models/usage_event.py`、`alembic/versions/0005_usage_events.py`、`scheduler_service.finish_due_jobs`、worker 每轮执行「启动 + 结束」两趟、`core/config.py` 新增 `scheduler_failure_rate`（默认 0）、`tests/test_job_finish.py`
+- **结束规则**：扫描 `running` 作业，`duration_min = ceil(elapsed_seconds / 60)`；`duration_min >= walltime_min` → `completed`；或命中失败率 → `failed`；终态写 `ended_at`
+- **资源与流水（同一事务）**：条件更新 `jobs WHERE status='running'`（`rowcount != 1` 回滚跳过，防重复结束）→ 释放 `node.gpu_used`（`WHERE gpu_used >= n` 钳位不为负）→ 追加一条 `usage_events`（`gpus` / `started_at` / `ended_at` / `duration_min` / `gpu_hours` / `rate_snapshot` / `reversed`）
+- **计费口径**：`gpu_hours = gpus × duration_min / 60`（保留 4 位，四舍五入），与 F4.6 的 `gpu_minutes` 同源，保证详情页与流水对账一致
+- **证据**：pytest **103 passed**（新增 7 例）；ruff check/format 全过；迁移 `base → head → base → head` 双向通过，`usage_events` 含 3 条 CHECK + 3 个索引
+- **用例**：walltime 到期 → completed + 释放节点 + 流水（2 卡 × 61 分钟 = `2.0333` 卡时）；未到期不动；恰好到期；注入失败 → failed + 流水（`0.1667`）；二次结束不重复产生流水；queued/终态忽略；多作业结束流水条数一致
+- **计划偏差**：`usage_events` 模型本应在 D23 建，因 D22 需要「结束即落流水」而**提前到 D22**；D23 继续完成 F5.2 费率快照填充、冲正（`reversed`）与流水查询
+- **设计取舍**：`scheduler_failure_rate` 默认 **0**（2s 轮询下非零故障率会过快杀作业，不符合演示预期）；失败路径通过配置 + 注入 `rng` 在测试中确定性验证
+
+### D23 · F5.1 冲正 + F5.2 费率快照与计费规则 —— 已完成
+
+- **产出**：`app/services/billing_service.py`（`gpu_hours` / `rate_snapshot` / `net_gpu_hours` / `reverse_job_usage`）、`core/config.py` 新增 `billing_currency` 与 `gpu_hour_rates`（按 `gpu_model` 定价，`default` 兜底）、`scheduler_service.finish_due_jobs` 改为落费率快照、`tests/test_billing.py`
+- **计费规则（F5.2）**：`duration_min = ceil(elapsed/60)`，`gpu_hours = gpus × duration_min / 60`（4 位小数，四舍五入）；手算 3 个 case 与系统一致：`1 卡×1 分钟=0.0167`、`2 卡×61 分钟=2.0333`、`4 卡×30 分钟=2.0000`
+- **费率快照**：按作业所在节点的 `gpu_model` 取单价，写入 `rate_snapshot`（`gpu_model` / `rate_key` / `gpu_hour` / `currency`，金额以字符串存避免 JSON 浮点误差）；未知型号回退 `default`；改价不影响历史流水
+- **冲正（F5.1）**：原流水**永不修改/删除**；`reverse_job_usage(job_id)` 追加 `reversed=true` 的补偿行（金额与时长同原行，可带 `reversal_reason`）；`net_gpu_hours` 汇总时**减法**处理补偿行；同一作业重复冲正为幂等空操作
+- **证据**：pytest **111 passed**（新增 8 例）；ruff check/format 全过；无新迁移（复用 `0005_usage_events`）
+- **用例**：3 组手算卡时；已知/未知型号与缺省费率快照；A100 节点结束落 `30.0000` 费率快照；冲正追加补偿行且净卡时为 0；原行保持不变；重复冲正幂等；无流水冲正为空操作
+
 ### 下一步
 
-- D22 F4.3 结束流转（walltime/故障率 → Completed/Failed）+ 写 `usage_events` + 释放节点卡
+- D24 F5.3 个人用量（按时间段查明细，明细合计 = 汇总）+ F5.4 组用量排行
 

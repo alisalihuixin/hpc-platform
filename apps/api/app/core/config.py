@@ -49,6 +49,19 @@ class Settings(BaseSettings):
     # ---- Scheduler (F4.3) ----
     # Poll interval for the worker's queued-job scan.
     scheduler_interval_seconds: float = 2.0
+    # Probability that a running job fails on a given poll.  Defaults to 0
+    # because a non-zero value on a 2s poll would kill jobs unrealistically
+    # fast; enable it only for demos of the failure path.
+    scheduler_failure_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+
+    # ---- Billing (F5.2) ----
+    billing_currency: str = "CNY"
+    # Demo prices per GPU-hour keyed by node ``gpu_model``; ``default`` is the
+    # fallback.  Override via env as JSON, e.g.
+    # GPU_HOUR_RATES={"default": 10, "A100-80G": 30}
+    gpu_hour_rates: dict[str, float] = Field(
+        default_factory=lambda: {"default": 10.0, "A100-80G": 30.0, "H100": 45.0}
+    )
 
     # ---- CORS ----
     cors_origins: list[str] = Field(
