@@ -8,6 +8,10 @@ import { useAuth } from '@/components/AuthProvider';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: '概览', adminOnly: false },
+  { href: '/jobs', label: '作业', adminOnly: false },
+  { href: '/jobs/new', label: '提交作业', adminOnly: false },
+  { href: '/nodes', label: '节点', adminOnly: false },
+  { href: '/usage', label: '我的用量', adminOnly: false },
   { href: '/admin/users', label: '用户管理', adminOnly: true },
 ];
 
@@ -30,6 +34,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const items = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
+  // Longest matching prefix wins so /jobs/new does not also light up /jobs.
+  const activeHref = items
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
+
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 flex-col border-r border-slate-200 bg-white md:flex">
@@ -42,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 space-y-1 p-3">
           {items.map((item) => {
-            const active = pathname.startsWith(item.href);
+            const active = item.href === activeHref;
             return (
               <Link
                 key={item.href}
@@ -60,7 +69,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="border-t border-slate-200 p-4 text-xs text-slate-400">
-          M1 · 骨架与认证
+          M2 · 资源 / 配额 / 作业 / 计量
         </div>
       </aside>
 

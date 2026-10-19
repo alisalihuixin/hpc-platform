@@ -70,3 +70,12 @@ class UsageEvent(Base):
 
     def __repr__(self) -> str:  # pragma: no cover - debug helper
         return f"<UsageEvent job={self.job_id} {self.gpus}gpu {self.gpu_hours}h>"
+
+    @property
+    def signed_gpu_hours(self) -> Decimal:
+        """Positive for usage rows, negative for compensating (reversed) rows.
+
+        Reports sum this field so that ``sum(items) == summary`` holds even when
+        corrections are present.
+        """
+        return -self.gpu_hours if self.reversed else self.gpu_hours

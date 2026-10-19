@@ -9,14 +9,24 @@
  */
 import type { paths } from './schema';
 import type {
+  GroupUsageRanking,
+  JobCreate,
+  JobDetail,
+  JobList,
+  JobRead,
+  JobStatus,
   LoginRequest,
   LogoutRequest,
   Message,
+  NodeList,
+  NodeStatus,
+  QuotaList,
   RefreshRequest,
   Token,
   UserCreate,
   UserList,
   UserRead,
+  UserUsage,
 } from './types';
 
 // Origin of the API. Empty means same-origin: the generated OpenAPI paths
@@ -34,6 +44,10 @@ export const endpoints = {
   logout: '/api/v1/auth/logout',
   me: '/api/v1/auth/me',
   users: '/api/v1/users',
+  nodes: '/api/v1/nodes',
+  jobs: '/api/v1/jobs',
+  quotasMe: '/api/v1/quotas/me',
+  usageMe: '/api/v1/usage/me',
 } satisfies Record<string, keyof paths>;
 
 export class ApiError extends Error {
@@ -78,11 +92,31 @@ async function parseError(response: Response): Promise<ApiError> {
     const body = (await response.json()) as { detail?: unknown };
     if (typeof body.detail === 'string') {
       detail = body.detail;
+    } else if (Array.isArray(body.detail)) {
+      // FastAPI 422: [{loc, msg, type}]. Surface the field messages.
+      const messages = body.detail
+        .map((item) =>
+          item && typeof item === 'object' && 'msg' in item
+            ? String((item as { msg: unknown }).msg)
+            : null,
+        )
+        .filter((message): message is string => Boolean(message));
+      if (messages.length > 0) detail = messages.join('；');
     }
   } catch {
     // non-JSON error body - keep the status text
   }
   return new ApiError(response.status, detail);
+}
+
+/** Serialise defined query parameters, skipping empty strings. */
+function query(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== '') search.set(key, String(value));
+  }
+  const text = search.toString();
+  return text ? `?${text}` : '';
 }
 
 async function request<T>(
@@ -172,5 +206,67 @@ export const usersApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  },
+};
+
+// ---- F4 jobs -------------------------------------------------------------
+export interface JobQuery {
+  status?: JobStatus;
+  since?: string;
+  until?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export const jobsApi = {
+  async list(params: JobQuery = {}): Promise<JobList> {
+    return request<JobList>(`${endpoints.jobs}${query({ ...params })}`);
+  },
+
+  async create(payload: JobCreate): Promise<JobRead> {
+    return request<JobRead>(endpoints.jobs, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async get(jobId: number): Promise<JobDetail> {
+    return request<JobDetail>(`${endpoints.jobs}/${jobId}`);
+  },
+
+  async cancel(jobId: number): Promise<JobRead> {
+    return request<JobRead>(`${endpoints.jobs}/${jobId}/cancel`, { method: 'POST' });
+  },
+};
+
+// ---- F2 nodes ------------------------------------------------------------
+export const nodesApi = {
+  async list(status?: NodeStatus): Promise<NodeList> {
+    return request<NodeList>(`${endpoints.nodes}${query({ status, limit: 200 })}`);
+  },
+};
+
+// ---- F3 quotas -----------------------------------------------------------
+export const quotasApi = {
+  async mine(): Promise<QuotaList> {
+    return request<QuotaList>(endpoints.quotasMe);
+  },
+};
+
+// ---- F5 usage ------------------------------------------------------------
+export interface UsageQuery {
+  since?: string;
+  until?: string;
+}
+
+export const usageApi = {
+  async mine(params: UsageQuery = {}): Promise<UserUsage> {
+    return request<UserUsage>(`${endpoints.usageMe}${query({ ...params })}`);
+  },
+
+  async groupRanking(groupId: number, params: UsageQuery = {}): Promise<GroupUsageRanking> {
+    return request<GroupUsageRanking>(
+      `/api/v1/usage/groups/${groupId}${query({ ...params })}`,
+    );
   },
 };

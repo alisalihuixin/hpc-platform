@@ -16,3 +16,25 @@ export type UserCreate = Schemas['UserCreate'];
 export type UserList = Schemas['UserList'];
 export type UserRead = Schemas['UserRead'];
 export type UserUpdate = Schemas['UserUpdate'];
+
+// F2 nodes
+export type NodeStatus = Schemas['NodeStatus'];
+export type NodeRead = Schemas['NodeRead'];
+export type NodeList = Schemas['NodeList'];
+
+// F3 quotas
+export type QuotaRead = Schemas['QuotaRead'];
+export type QuotaList = Schemas['QuotaList'];
+
+// F4 jobs
+export type JobStatus = Schemas['JobStatus'];
+export type JobCreate = Schemas['JobCreate'];
+export type JobRead = Schemas['JobRead'];
+export type JobDetail = Schemas['JobDetail'];
+export type JobList = Schemas['JobList'];
+
+// F5 usage
+export type UsageEventRead = Schemas['UsageEventRead'];
+export type UserUsage = Schemas['UserUsage'];
+export type UserUsageRank = Schemas['UserUsageRank'];
+export type GroupUsageRanking = Schemas['GroupUsageRanking'];

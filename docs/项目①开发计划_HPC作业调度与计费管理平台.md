@@ -168,6 +168,7 @@ D17 作业模型 ─────────────────────
 | 节点/配额更新方法 | `PUT /nodes`、`PUT /quotas/{id}` | `PATCH`（与 `users` 一致） | 先保持内部一致，或统一改 `PUT` |
 | 健康检查路径 | `/healthz`（F8.3） | `/health`、`/health/ready` | 归入 M1 收口时对齐 |
 | 登录限流窗口 | 5 次 / **5 分钟**（F1.4） | 5 次 / **60 秒** | 归入 M1 收口时按 PRD 调整 |
+| 组用量排行权限 | admin / **组管**（F5.4） | 仅 admin | 「组管」角色尚未建模，先用 admin 代行 |
 
 ### D17 · F4.1 作业模型 + 状态机 + 索引 + 迁移 —— 已完成
 
@@ -235,7 +236,25 @@ D17 作业模型 ─────────────────────
 - **证据**：pytest **111 passed**（新增 8 例）；ruff check/format 全过；无新迁移（复用 `0005_usage_events`）
 - **用例**：3 组手算卡时；已知/未知型号与缺省费率快照；A100 节点结束落 `30.0000` 费率快照；冲正追加补偿行且净卡时为 0；原行保持不变；重复冲正幂等；无流水冲正为空操作
 
+### D24 · F5.3 个人用量 + F5.4 组用量排行 —— 已完成
+
+- **产出**：`app/schemas/usage.py`、`app/services/usage_service.py`、`app/routers/usage.py`、`UsageEvent.signed_gpu_hours` 属性、`tests/test_usage.py`
+- **接口**：`GET /usage/me`（登录，`since`/`until` 按 `started_at` 过滤，返回 `items + total + total_gpu_hours`）；`GET /usage/groups/{group_id}`（admin，组内成员排行，返回 `items[user_id, username, gpu_hours, job_count] + total_gpu_hours`）
+- **对账口径**：明细与排行均按**净卡时**统计（`reversed` 补偿行做减法）；每条明细额外给出 `signed_gpu_hours`（冲正为负），因此 `sum(items.signed_gpu_hours) == total_gpu_hours` 恒成立；排行 `job_count` 用 `count(distinct job_id)`，冲正行不会重复计数
+- **权限**：`/usage/me` 仅本人；组排行 admin（PRD 的「组管」角色尚未建模，先用 admin 代行，已登记偏差）
+- **证据**：pytest **119 passed**（新增 8 例）；ruff check/format 全过；无新迁移
+- **用例**：匿名 401；明细仅本人且净额 `2.0 - 0.5 = 1.5`；明细时间筛选；排行按净卡时降序且「行合计 = 汇总」；排行时间筛选；非 admin 403；未知组 404；跨组数据不串
+- **设计取舍**：`/usage/me` 不做分页——时间段本身是天然边界，且能保证「明细合计 = 汇总值」这条验收字面成立；数据量增大后可改为游标分页 + 独立汇总查询
+
+### D25 · M2 前端（作业 / 节点 / 用量）—— 已完成
+
+- **产出**：页面 `/jobs`、`/jobs/new`、`/jobs/[id]`、`/nodes`、`/usage`；`AppShell` 导航（作业 / 提交作业 / 节点 / 我的用量）；`lib/api/client.ts` 新增 `jobsApi` / `nodesApi` / `quotasApi` / `usageApi`，`types.ts` 扩展 F2–F5 类型；`components/JobStatusBadge.tsx`、`lib/format.ts`；`schema.d.ts` 由当前 OpenAPI 重新生成（17 条路径）
+- **交互**：作业列表支持状态筛选、取消与刷新；提交页从 `/quotas/me` 取组与余量，前端按「组上限 + 当前余量 + params JSON」同规则预校验；详情页 `queued`/`running` 时每 3s 轮询（SSE 留给 D26）；用量页按时间段筛选并展示净卡时与冲正标记
+- **体验细节**：`parseError` 支持 FastAPI 422 的 `detail[]` 字段消息；导航高亮取最长前缀，避免 `/jobs/new` 同时点亮 `/jobs`
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run build` 全过（11 条路由，shared JS 87.2 kB）；后端 pytest **119 passed** 不变
+- **未验证**：浏览器端到端（本机未启动 PG/Redis/worker）；计划在 D26 SSE 完成后与双浏览器联动一起实测
+
 ### 下一步
 
-- D24 F5.3 个人用量（按时间段查明细，明细合计 = 汇总）+ F5.4 组用量排行
+- D26 F4.7 SSE：`GET /jobs/stream`（Redis Pub/Sub 扇出），状态变更实时推送
 

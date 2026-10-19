@@ -5,6 +5,7 @@ from app.services import (
     node_service,
     quota_service,
     scheduler_service,
+    usage_service,
     user_service,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "node_service",
     "quota_service",
     "scheduler_service",
+    "usage_service",
     "user_service",
 ]
