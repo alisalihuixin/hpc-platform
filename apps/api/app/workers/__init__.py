@@ -1,10 +1,8 @@
 """Background workers (ARQ).
 
-M1 only ships the skeleton: an ARQ worker wired to the same Redis instance so
-later milestones can enqueue real jobs (scheduler polling, billing roll-ups)
-without new infrastructure.
+The worker ships with a scheduler poll loop (F4.3) plus the ``ping`` smoke task.
 """
 
-from app.workers.tasks import ping
+from app.workers.tasks import ping, schedule_jobs
 
-__all__ = ["ping"]
+__all__ = ["ping", "schedule_jobs"]

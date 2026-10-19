@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅ 完成** ｜ **M2 进行中**（已完成 D11–D18：F2 节点域、F3 配额域、F4.1 作业模型、F4.2 作业提交）｜ 下一步 D19 作业取消 / 列表
+当前进度：**M1 骨架与认证 ✅ 完成** ｜ **M2 进行中**（已完成 D11–D21：F2 节点域、F3 配额域、F4 作业模型/提交/取消/列表/详情 + 模拟调度器）｜ 下一步 D22 作业结束流转与计费流水
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -49,14 +49,14 @@ hpc-platform/
 │   │   ├── app/
 │   │   │   ├── core/           # config / security / redis / rate_limit / errors
 │   │   │   ├── db/             # Base、异步引擎、get_db
-│   │   │   ├── models/         # SQLAlchemy 2.0 ORM（users / roles / nodes / groups / quotas）
+│   │   │   ├── models/         # SQLAlchemy 2.0 ORM（users / roles / nodes / groups / quotas / jobs）
 │   │   │   ├── schemas/        # Pydantic v2 出入参
-│   │   │   ├── services/       # 业务逻辑（auth / user / node / quota）
-│   │   │   ├── routers/        # HTTP 层（auth / users / nodes / quotas / health）
+│   │   │   ├── services/       # 业务逻辑（auth / user / node / quota / job / scheduler）
+│   │   │   ├── routers/        # HTTP 层（auth / users / nodes / quotas / jobs / health）
 │   │   │   ├── deps/           # 依赖注入（会话、Redis、当前用户、RBAC）
-│   │   │   ├── workers/        # ARQ 后台任务骨架（M2 起接入调度）
+│   │   │   ├── workers/        # ARQ 后台任务（调度轮询 + ping）
 │   │   │   └── main.py         # 应用工厂
-│   │   ├── alembic/            # 迁移（users/roles → nodes → groups/quotas）
+│   │   ├── alembic/            # 迁移（users/roles → nodes → groups/quotas → jobs）
 │   │   └── tests/              # pytest（SQLite + fakeredis，无需外部依赖）
 │   └── web/                    # Next.js 14 (App Router) 前端
 │       ├── src/app/            # 登录页 + 布局壳 + 概览 + 用户管理
@@ -101,10 +101,11 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **67 passed**（≈4.9s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 57 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **96 passed**（≈5.6s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 61 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
+| 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
 | 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端首屏 JS | — | **87.2 kB** | `next build` 输出（shared chunks） |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
@@ -159,10 +160,10 @@ hpc-platform/
 **遗留 / 风险**
 
 - 前端 token 暂存 `localStorage`，加固方向为 refresh 落 httpOnly + SameSite=Strict Cookie（含 CSRF 防护）。
-- `worker` 服务仅为骨架（`profile: workers`），M2 接入真实调度任务。
+- `worker` 已接入调度轮询（F4.3），但默认在 `profile: workers` 下，需 `docker compose --profile workers up -d` 才会启动。
 - 尚未接入覆盖率统计与并发压测。
 
-### M2 资源 / 配额 / 作业 / 计量 —— ⏳ 进行中（D11–D18 完成）
+### M2 资源 / 配额 / 作业 / 计量 —— ⏳ 进行中（D11–D21 完成）
 
 > 计划与逐日进度见 [`docs/项目①开发计划_HPC作业调度与计费管理平台.md`](docs/项目①开发计划_HPC作业调度与计费管理平台.md) 第 8 节。
 
@@ -174,12 +175,16 @@ hpc-platform/
 - [x] F3.3 配额返还、F3.4 配额管理、F3.5 配额查询接口
 - [x] F4.1 作业模型：`jobs` 状态机 + CHECK + 索引 + 迁移
 - [x] F4.2 作业提交：字段级校验 → 配额预扣 → 入队（同事务）
+- [x] F4.4 取消作业：条件 `UPDATE` + `rowcount`，终态 409，取消返还预扣
+- [x] F4.5 作业列表：分页 + 状态/时间筛选，user 仅见自己、admin 见全部
+- [x] F4.6 作业详情：资源/起止/消耗卡时（按分钟向上取整）+ mock 日志
+- [x] F4.3 模拟调度器（排队→运行）：FIFO + 最空闲节点 + 原子占卡，worker 2s 轮询
 
 **交付物**
 
-- 后端：`app/models/{node,group,quota,job}.py`、`app/schemas/{node,quota,job}.py`、`app/services/{node_service,quota_service,job_service}.py`、`app/routers/{nodes,quotas,jobs}.py`
+- 后端：`app/models/{node,group,quota,job}.py`、`app/schemas/{node,quota,job}.py`、`app/services/{node_service,quota_service,job_service,scheduler_service}.py`、`app/routers/{nodes,quotas,jobs}.py`、`app/workers/{tasks,settings}.py`
 - 迁移：`alembic/versions/0002_nodes.py`、`0003_groups_quotas.py`、`0004_jobs.py`
-- 测试：`tests/test_nodes.py`、`tests/test_quota.py`、`tests/test_quota_endpoints.py`、`tests/test_job_model.py`、`tests/test_job_submit.py`
+- 测试：`tests/test_nodes.py`、`tests/test_quota.py`、`tests/test_quota_endpoints.py`、`tests/test_job_model.py`、`tests/test_job_submit.py`、`tests/test_job_cancel_list.py`、`tests/test_job_detail.py`、`tests/test_scheduler.py`
 
 **验收结论**
 
@@ -192,11 +197,17 @@ hpc-platform/
 | 5 | F3.5 配额查询数值与扣减一致 | ✅ `/quotas/me` 返回 `gpu_available` |
 | 6 | F4.2 超上限字段返回 422 + 明确字段 | ✅ 组级上限与静态上限两条来源均返回 `detail[].loc` |
 | 7 | F4.2 配额不足 409 且不落库 | ✅ 预扣+入队同事务，409 后 `gpu_used` 回滚、`jobs` 0 行 |
+| 8 | F4.4 终态作业取消返回 409 | ✅ 条件 `UPDATE` + `rowcount`；重复取消不二次返还 |
+| 9 | F4.5 user 仅见自己、admin 见全部 | ✅ 列表强制按 `user_id` 过滤（非 admin） |
+| 10 | F4.6 详情字段齐全 | ✅ 资源/起止/`gpu_minutes`（2 卡 × 30 分钟 = 60）/mock 日志；仅本人或 admin |
+| 11 | F4.3 排队作业进入 Running | ✅ 单次调度扫描即流转并占卡（worker 2s 轮询；端到端未实测） |
 
 **关键实现**
 
 - 防超卖：[`quota_service.py`](apps/api/app/services/quota_service.py) —— 条件原子 `UPDATE ... WHERE gpu_used + :n <= gpu_limit` + `rowcount` 判定，杜绝读-改-写竞态；`reserve`/`release` 不 commit，由调用方保证「预扣 + 入队」同事务。
 - 作业提交：[`job_service.py`](apps/api/app/services/job_service.py) —— 成员校验 → 组级上限校验（422 字段级）→ 原子预扣（409）→ 入队，③④ 同一事务提交。
+- 取消作业：条件 `UPDATE ... WHERE status IN ('queued','running')` + `rowcount` 判定，终态 409；取消即返还预扣，实际卡时由 `usage_events` 计费（D22）。
+- 调度器：[`scheduler_service.py`](apps/api/app/services/scheduler_service.py) —— FIFO 扫描 queued，选最空闲 online 节点，条件 `UPDATE nodes` 原子占卡后再把作业置 running；每作业独立事务，worker 起始时启动 2s 轮询循环。
 - 数据兜底：[`quota.py`](apps/api/app/models/quota.py) 的 CHECK `gpu_used <= gpu_limit`，应用层有 bug 也越不过去。
 - 并发用例：[`test_quota.py`](apps/api/tests/test_quota.py) 用**文件库多连接**制造真并发（in-memory + `StaticPool` 单连接会串行化，测不出竞态）。
 
@@ -299,6 +310,9 @@ npm run dev                      # :3000；/api/** 由 next.config.mjs 的 rewri
 | GET | `/quotas/me` | 登录 | 我所属各组的配额余量 |
 | GET / PATCH | `/quotas/{group_id}` | admin | 查询 / 调整组配额 |
 | POST | `/jobs` | 登录 | 提交作业（校验 + 配额预扣 + 入队，201） |
+| GET | `/jobs` | 登录 | 作业列表（分页 + 状态/时间筛选；user 仅自己、admin 全部） |
+| GET | `/jobs/{id}` | 本人/admin | 作业详情（资源/起止/消耗卡时 + mock 日志） |
+| POST | `/jobs/{id}/cancel` | 本人/admin | 取消作业（终态 409，返还预扣） |
 | GET | `/health` · `/health/ready` | 匿名 | 存活 / 就绪（检查 PG + Redis） |
 
 限流与黑名单的手工复现脚本：

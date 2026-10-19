@@ -1,5 +1,5 @@
 from app.schemas.common import Message
-from app.schemas.job import JobCreate, JobList, JobRead
+from app.schemas.job import JobCreate, JobDetail, JobList, JobRead
 from app.schemas.node import NodeCreate, NodeList, NodeRead, NodeUpdate
 from app.schemas.quota import QuotaList, QuotaRead, QuotaUpdate
 from app.schemas.token import LoginRequest, LogoutRequest, RefreshRequest, Token
@@ -24,6 +24,7 @@ __all__ = [
     "QuotaRead",
     "QuotaUpdate",
     "JobCreate",
+    "JobDetail",
     "JobList",
     "JobRead",
 ]

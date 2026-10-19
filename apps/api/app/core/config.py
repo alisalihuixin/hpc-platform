@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     login_rate_limit_max_attempts: int = 5
     login_rate_limit_window_seconds: int = 60
 
+    # ---- Scheduler (F4.3) ----
+    # Poll interval for the worker's queued-job scan.
+    scheduler_interval_seconds: float = 2.0
+
     # ---- CORS ----
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost"]

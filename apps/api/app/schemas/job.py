@@ -55,3 +55,10 @@ class JobRead(BaseModel):
 class JobList(BaseModel):
     items: list[JobRead]
     total: int
+
+
+class JobDetail(JobRead):
+    """Job detail (F4.6): adds consumed GPU-minutes and a mock log."""
+
+    gpu_minutes: int = Field(ge=0, description="Consumed GPU-minutes (ceil per minute)")
+    log: str

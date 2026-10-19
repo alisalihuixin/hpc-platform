@@ -186,7 +186,36 @@ D17 作业模型 ─────────────────────
 - **用例**：匿名 401；成功 201 + `status=queued` + 配额 `gpu_used` 递增；`num_gpus=0`（CPU-only）不动配额；超组上限 422（断言 `loc=["body","num_gpus"]`/`["body","num_nodes"]`）；`walltime_min` 超静态上限 422；配额不足 409 且 **`gpu_used` 回滚、jobs 表 0 行**（原子性）；非成员 403；未知组 404
 - **设计取舍**：静态上限（`Field(le=…)`，如 `num_gpus ≤ 4096`、`walltime_min ≤ 一周`）与组级上限（依赖配额、动态）分两层校验——前者在 schema，后者在 service 抛 422 同形错误体，保证「超上限字段返回 422 及明确字段错误」这条验收同时覆盖两种来源
 
+### D19 · F4.4 取消作业 + F4.5 作业列表 —— 已完成
+
+- **产出**：`job_service.list_jobs` / `get_job` / `cancel_job`、`app/models/job.py` 新增 `CANCELABLE_STATUSES`、`app/routers/jobs.py` 新增 `GET /jobs` 与 `POST /jobs/{id}/cancel`、`tests/test_job_cancel_list.py`
+- **取消（F4.4）**：`UPDATE jobs SET status='canceled', ended_at=now() WHERE id=? AND status IN ('queued','running')` 单语句完成「状态检查 + 写入」，`rowcount != 1` → **409**（已终态/并发取消的败者都不会重复返还）；权限为**本人或 admin**（他人 403、不存在 404）；取消成功后按 `num_gpus` **返还配额预扣**（实际消耗的卡时由 D22 的 `usage_events` 计费，不走配额池）
+- **列表（F4.5）**：分页 `skip/limit`（limit ≤ 200）+ `status` / `since` / `until`（按 `queued_at`）筛选；**非 admin 强制 `user_id = 当前用户`**，admin 看全部；排序 `(queued_at DESC, id DESC)`；返回 `{items, total}`
+- **证据**：pytest **81 passed**（新增 14 例）；ruff check/format 全过
+- **用例**：本人取消 200 且配额回 0；重复取消 409 且不二次返还；已完成作业取消 409；admin 可取消他人作业；非本人非 admin 403；未知作业 404；匿名 401；用户仅见自己 / admin 见全部；状态筛选；分页 `total` 与不重叠；时间窗口（未来/过去/覆盖）筛选；非法 status 参数 422
+- **设计取舍**：列表按 `queued_at` 过滤而非 `created_at`——同一语义更贴近「排队时间」，且与 `ix_jobs_status_queued_at` 索引对齐；取消不做读-改-写，避免两个请求都判定可取消
+
+### D20 · F4.6 作业详情 —— 已完成
+
+- **产出**：`app/schemas/job.py` 新增 `JobDetail`（继承 `JobRead`，追加 `gpu_minutes` / `log`）、`job_service.get_visible_job` / `used_gpu_minutes` / `build_log`、`GET /jobs/{id}`、`tests/test_job_detail.py`
+- **详情字段**：状态、节点数/卡数、walltime、params、`queued_at`/`started_at`/`ended_at`、**消耗卡时 `gpu_minutes`**、**mock 日志 `log`**
+- **卡时口径**：`gpu_minutes = num_gpus × ceil(elapsed_seconds / 60)`，与 F5.2 计费规则（按分钟向上取整）一致；未启动为 0，运行中按「到当前时刻」累计，结束后按 `ended_at` 固定
+- **权限**：仅本人或 admin（`get_visible_job`，他人 403、不存在 404、匿名 401）；取消接口复用同一权限函数
+- **证据**：pytest **88 passed**（新增 7 例）；ruff check/format 全过
+- **用例**：匿名 401；本人读排队中作业（`gpu_minutes=0`、日志含 `[queued]`）；已完成作业 `2 卡 × 30 分钟 = 60` 且日志含 queued/running/completed；运行中按当前时刻累计；admin 可读他人；非本人 403；未知 404
+- **实现要点**：SQLite 读回的是 naive datetime，统一 `_as_utc()` 归一后再做差值，避免 `naive - aware` 报错（PG 下为 aware，同样兼容）
+
+### D21 · F4.3 模拟调度器（排队 → Running）—— 已完成
+
+- **产出**：`app/services/scheduler_service.py`（`schedule_once` / `_claim_node`）、`app/workers/tasks.py`（`schedule_jobs` ARQ 任务）、`app/workers/settings.py`（启动轮询循环）、`core/config.py` 新增 `scheduler_interval_seconds`（默认 2s）、`tests/test_scheduler.py`
+- **调度逻辑**：扫描 `status='queued'` 按 `(queued_at, id)` **FIFO**；候选节点为 `status='online'` 且 `gpu_total - gpu_used >= num_gpus`，按 `gpu_used ASC, hostname ASC` **优先最空闲**；用条件 `UPDATE nodes SET gpu_used = gpu_used + :n WHERE ... AND gpu_used + :n <= gpu_total` 原子占卡（与配额同一防超卖模式）；再条件 `UPDATE jobs SET status='running', node_id=?, started_at=now() WHERE id=? AND status='queued'`，若已被别的实例抢占则回滚并释放节点卡
+- **事务粒度**：每个作业独立事务（节点占卡 + 状态流转一起提交），单个作业不可调度不会阻塞后续队列；无可调度节点时 job 保持 `queued`
+- **运行时**：ARQ worker（`arq app.workers.settings.WorkerSettings`）在 `on_startup` 启动 2s 轮询循环，`on_shutdown` 取消；也可把 `schedule_jobs` 当普通任务入队
+- **证据**：pytest **96 passed**（新增 8 例）；ruff check/format 全过；worker 配置导入校验通过（`functions=[ping, schedule_jobs]`）
+- **用例**：有容量即启动并占卡；容量不足保持 queued；offline/draining 节点跳过；FIFO 先到先得；优先最空闲节点；节点被填满后第 3 个作业继续排队；二次调度不重复启动（`started_at`/`gpu_used` 不变）；`num_gpus=0` 的 CPU-only 作业可落节点且不占卡
+- **计划偏差**：MVP 每个作业只落到**单个节点**（`jobs` 仅有一个 `node_id`），`num_nodes` 先作为请求参数保留；D22 结束时可按该 `node_id` 精确释放节点卡
+
 ### 下一步
 
-- D19 F4.4 取消作业 + F4.5 作业列表（分页/筛选/权限，user 仅见自己）
+- D22 F4.3 结束流转（walltime/故障率 → Completed/Failed）+ 写 `usage_events` + 释放节点卡
 

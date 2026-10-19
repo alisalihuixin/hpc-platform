@@ -43,6 +43,9 @@ class JobStatus(enum.StrEnum):
 
 TERMINAL_STATUSES = frozenset({JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELED})
 
+#: Statuses a user may still cancel; anything else is already final (F4.4).
+CANCELABLE_STATUSES = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
+
 #: Legal transitions; anything else is a bug and must be rejected.
 ALLOWED_TRANSITIONS: dict[JobStatus, frozenset[JobStatus]] = {
     JobStatus.QUEUED: frozenset({JobStatus.RUNNING, JobStatus.CANCELED}),
