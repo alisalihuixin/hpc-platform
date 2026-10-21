@@ -35,6 +35,8 @@ class Node(Base):
     __table_args__ = (
         CheckConstraint("status IN ('online', 'offline', 'draining')", name="ck_nodes_status"),
         CheckConstraint("gpu_used >= 0 AND gpu_used <= gpu_total", name="ck_nodes_gpu_used"),
+        CheckConstraint("cpu_used >= 0 AND cpu_used <= cpu_cores", name="ck_nodes_cpu_used"),
+        CheckConstraint("mem_used >= 0 AND mem_used <= mem_gb", name="ck_nodes_mem_used"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -44,6 +46,9 @@ class Node(Base):
     gpu_model: Mapped[str | None] = mapped_column(String(128), default=None)
     gpu_total: Mapped[int] = mapped_column(Integer, default=0)
     gpu_used: Mapped[int] = mapped_column(Integer, default=0)
+    # Scheduler-managed slot counters (F2/F4.3), never set by hand.
+    cpu_used: Mapped[int] = mapped_column(Integer, default=0)
+    mem_used: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(16), default=NodeStatus.ONLINE.value, index=True)
     tags: Mapped[dict[str, Any]] = mapped_column(JSONDict, default=dict)
 
@@ -61,6 +66,14 @@ class Node(Base):
     def gpu_free(self) -> int:
         """Idle GPU count - surfaced by the read-only resource view (F2.3)."""
         return max(self.gpu_total - self.gpu_used, 0)
+
+    @property
+    def cpu_free(self) -> int:
+        return max(self.cpu_cores - self.cpu_used, 0)
+
+    @property
+    def mem_free(self) -> int:
+        return max(self.mem_gb - self.mem_used, 0)
 
     @property
     def accepts_jobs(self) -> bool:

@@ -1,17 +1,24 @@
-"""Simulated scheduler (F4.3): FIFO placement onto online nodes."""
+"""Simulated scheduler (F4.3): policy ordering, resource slots, crash safety."""
 
 from __future__ import annotations
 
+import asyncio
+import os
+import tempfile
+from contextlib import suppress
 from datetime import datetime, timedelta
 
 import pytest_asyncio
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.db.base import Base
 from app.models.group import Group
 from app.models.job import Job
 from app.models.node import Node
 from app.models.user import User
 from app.services import scheduler_service
+from app.services.scheduling_policy import PriorityPolicy
 from tests.conftest import USER_EMAIL
 
 
@@ -32,15 +39,21 @@ async def _add_node(
     gpu_total: int,
     *,
     gpu_used: int = 0,
+    cpu_cores: int = 32,
+    cpu_used: int = 0,
+    mem_gb: int = 128,
+    mem_used: int = 0,
     status: str = "online",
 ) -> int:
     async with session_factory() as db:
         node = Node(
             hostname=hostname,
-            cpu_cores=32,
-            mem_gb=128,
+            cpu_cores=cpu_cores,
+            mem_gb=mem_gb,
             gpu_total=gpu_total,
             gpu_used=gpu_used,
+            cpu_used=cpu_used,
+            mem_used=mem_used,
             status=status,
         )
         db.add(node)
@@ -55,6 +68,9 @@ async def _add_job(
     name: str,
     num_gpus: int,
     num_nodes: int = 1,
+    num_cpus: int = 0,
+    mem_gb: int = 0,
+    priority: int = 0,
     queued_at: datetime | None = None,
 ) -> int:
     user_id, group_id = owner_and_group
@@ -65,6 +81,9 @@ async def _add_job(
             name=name,
             num_nodes=num_nodes,
             num_gpus=num_gpus,
+            num_cpus=num_cpus,
+            mem_gb=mem_gb,
+            priority=priority,
             walltime_min=60,
             params={},
         )
@@ -196,3 +215,166 @@ async def test_cpu_only_job_is_placed_without_gpu_usage(session_factory, owner_a
     assert job.status == "running"
     assert job.node_id == node_id
     assert (await _node(session_factory, node_id)).gpu_used == 0
+
+
+# --------------------------------------------------------------- policies
+
+
+async def test_fifo_starts_the_oldest_job_first(session_factory, owner_and_group) -> None:
+    await _add_node(session_factory, "gpu-01", gpu_total=2)
+    base = datetime(2026, 1, 1, 10, 0, 0)
+    older = await _add_job(
+        session_factory, owner_and_group, name="older", num_gpus=2, queued_at=base
+    )
+    urgent = await _add_job(
+        session_factory,
+        owner_and_group,
+        name="urgent",
+        num_gpus=2,
+        priority=100,
+        queued_at=base + timedelta(seconds=1),
+    )
+
+    assert await _run(session_factory) == 1
+
+    assert (await _job(session_factory, older)).status == "running"
+    assert (await _job(session_factory, urgent)).status == "queued"
+
+
+async def test_priority_policy_starts_the_urgent_job_first(
+    session_factory, owner_and_group
+) -> None:
+    await _add_node(session_factory, "gpu-01", gpu_total=2)
+    base = datetime(2026, 1, 1, 10, 0, 0)
+    older = await _add_job(
+        session_factory, owner_and_group, name="older", num_gpus=2, queued_at=base
+    )
+    urgent = await _add_job(
+        session_factory,
+        owner_and_group,
+        name="urgent",
+        num_gpus=2,
+        priority=100,
+        queued_at=base + timedelta(seconds=1),
+    )
+
+    async with session_factory() as db:
+        assert await scheduler_service.schedule_once(db, policy=PriorityPolicy()) == 1
+
+    assert (await _job(session_factory, urgent)).status == "running"
+    assert (await _job(session_factory, older)).status == "queued"
+
+
+# --------------------------------------------------------------- cpu / memory
+
+
+async def test_cpu_capacity_keeps_job_queued(session_factory, owner_and_group) -> None:
+    node_id = await _add_node(session_factory, "cpu-small", gpu_total=4, cpu_cores=4, mem_gb=16)
+    job_id = await _add_job(
+        session_factory, owner_and_group, name="cpu-hungry", num_gpus=1, num_cpus=8
+    )
+
+    assert await _run(session_factory) == 0
+    assert (await _job(session_factory, job_id)).status == "queued"
+    assert (await _node(session_factory, node_id)).cpu_used == 0
+
+
+async def test_memory_capacity_keeps_job_queued(session_factory, owner_and_group) -> None:
+    node_id = await _add_node(session_factory, "mem-small", gpu_total=4, cpu_cores=32, mem_gb=8)
+    job_id = await _add_job(
+        session_factory, owner_and_group, name="mem-hungry", num_gpus=1, mem_gb=16
+    )
+
+    assert await _run(session_factory) == 0
+    assert (await _job(session_factory, job_id)).status == "queued"
+    assert (await _node(session_factory, node_id)).mem_used == 0
+
+
+async def test_cpu_and_memory_slots_are_claimed_and_released(
+    session_factory, owner_and_group
+) -> None:
+    node_id = await _add_node(session_factory, "gpu-slots", gpu_total=4, cpu_cores=16, mem_gb=32)
+    await _add_job(
+        session_factory,
+        owner_and_group,
+        name="slots",
+        num_gpus=2,
+        num_cpus=4,
+        mem_gb=8,
+    )
+    started = datetime(2026, 1, 1, 10, 0, 0)
+
+    async with session_factory() as db:
+        assert await scheduler_service.schedule_once(db, now=started) == 1
+
+    node = await _node(session_factory, node_id)
+    assert (node.gpu_used, node.cpu_used, node.mem_used) == (2, 4, 8)
+
+    async with session_factory() as db:
+        assert await scheduler_service.finish_due_jobs(db, now=started + timedelta(minutes=61)) == 1
+
+    node = await _node(session_factory, node_id)
+    assert (node.gpu_used, node.cpu_used, node.mem_used) == (0, 0, 0)
+
+
+# ------------------------------------------------------- concurrent schedulers
+
+
+@pytest_asyncio.fixture
+async def file_session_factory():
+    handle, path = tempfile.mkstemp(suffix=".db")
+    os.close(handle)
+    url = "sqlite+aiosqlite:///" + path.replace("\\", "/")
+    engine = create_async_engine(url, connect_args={"timeout": 30})
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    factory = async_sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+    )
+    yield factory
+    await engine.dispose()
+    with suppress(OSError):
+        os.remove(path)
+
+
+async def test_concurrent_scheduler_passes_never_over_allocate(
+    file_session_factory,
+) -> None:
+    """Two scheduler instances racing over 20 jobs must not exceed node slots."""
+    factory = file_session_factory
+    async with factory() as db:
+        user = User(email="sched@hpc.local", username="sched", hashed_password="x")
+        group = Group(name="burst-sched")
+        db.add_all([user, group])
+        await db.flush()
+        db.add(Node(hostname="gpu-burst", cpu_cores=64, mem_gb=256, gpu_total=10))
+        db.add_all(
+            [
+                Job(
+                    user_id=user.id,
+                    group_id=group.id,
+                    name=f"job-{index}",
+                    num_nodes=1,
+                    num_gpus=1,
+                    walltime_min=60,
+                    params={},
+                )
+                for index in range(20)
+            ]
+        )
+        await db.commit()
+
+    async def pass_once() -> int:
+        async with factory() as db:
+            return await scheduler_service.schedule_once(db)
+
+    results = await asyncio.gather(pass_once(), pass_once())
+
+    async with factory() as db:
+        node = await db.scalar(select(Node))
+        statuses = list((await db.scalars(select(Job.status))).all())
+
+    assert sum(results) == 10  # 10 GPU slots, no more
+    assert node is not None and node.gpu_used == 10
+    assert statuses.count("running") == 10
+    assert statuses.count("queued") == 10

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.models.group import Group
 from app.models.job import Job
 from app.models.node import Node
+from app.models.quota import Quota
 from app.models.usage_event import UsageEvent
 from app.models.user import User
 from app.services import scheduler_service
@@ -244,3 +245,23 @@ async def test_event_count_matches_finished_jobs(session_factory, owner_and_grou
         total = await db.scalar(select(func.count()).select_from(UsageEvent))
     assert total == 2
     assert (await _node(session_factory, node_id)).gpu_used == 0
+
+
+async def test_completion_returns_the_quota_reservation(session_factory, owner_and_group) -> None:
+    _, group_id = owner_and_group
+    node_id = await _add_node(session_factory, gpu_total=4, gpu_used=2)
+    async with session_factory() as db:
+        db.add(Quota(group_id=group_id, gpu_limit=8, gpu_used=2))
+        await db.commit()
+
+    started = datetime(2026, 1, 1, 10, 0, 0)
+    await _add_running_job(
+        session_factory, owner_and_group, node_id=node_id, num_gpus=2, started_at=started
+    )
+
+    assert await _finish(session_factory, now=started + timedelta(minutes=61)) == 1
+
+    async with session_factory() as db:
+        quota = await db.scalar(select(Quota).where(Quota.group_id == group_id))
+    assert quota is not None
+    assert quota.gpu_used == 0  # reservation returned on the terminal transition

@@ -64,11 +64,14 @@ class Job(Base):
             name="ck_jobs_status",
         ),
         CheckConstraint("num_nodes > 0 AND num_gpus >= 0", name="ck_jobs_resources"),
+        CheckConstraint("num_cpus >= 0 AND mem_gb >= 0", name="ck_jobs_cpu_mem"),
         CheckConstraint("walltime_min > 0", name="ck_jobs_walltime"),
         # Feeds the scheduler's "next queued job" scan.
         Index("ix_jobs_status_queued_at", "status", "queued_at"),
         # Feeds the per-user job history page.
         Index("ix_jobs_user_created_at", "user_id", "created_at"),
+        # Feeds the orphan reaper (running jobs with expired leases).
+        Index("ix_jobs_status_lease", "status", "lease_expires_at"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -80,6 +83,11 @@ class Job(Base):
     name: Mapped[str] = mapped_column(String(255))
     num_nodes: Mapped[int] = mapped_column(Integer)
     num_gpus: Mapped[int] = mapped_column(Integer, default=0)
+    # CPU cores and memory are per-node slot requests (placement is single-node).
+    num_cpus: Mapped[int] = mapped_column(Integer, default=0)
+    mem_gb: Mapped[int] = mapped_column(Integer, default=0)
+    # Higher runs first under the priority policy; FIFO ignores it.
+    priority: Mapped[int] = mapped_column(Integer, default=0)
     walltime_min: Mapped[int] = mapped_column(Integer)
     params: Mapped[dict[str, Any]] = mapped_column(JSONDict, default=dict)
 
@@ -89,6 +97,9 @@ class Job(Base):
     node_id: Mapped[int | None] = mapped_column(
         ForeignKey("nodes.id", ondelete="SET NULL"), default=None
     )
+    # Renewed every scheduler cycle; an expired lease means the worker died and
+    # the job is reclaimed by ``recover_orphaned_jobs`` (F4.3).
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
 
     queued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

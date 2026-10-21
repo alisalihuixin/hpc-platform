@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError, ConflictError, NotFoundError
@@ -72,3 +72,28 @@ async def delete_node(db: AsyncSession, node_id: int) -> None:
         raise NotFoundError("Node not found")
     await db.delete(node)
     await db.commit()
+
+
+async def release_slots(
+    db: AsyncSession,
+    *,
+    node_id: int | None,
+    num_gpus: int,
+    num_cpus: int,
+    mem_gb: int,
+) -> None:
+    """Return a finished job's slots, clamped at zero so counters never underflow.
+
+    Used by the scheduler (terminal transitions) and by cancellation.
+    """
+    if node_id is None:
+        return
+    await db.execute(
+        update(Node)
+        .where(Node.id == node_id)
+        .values(
+            gpu_used=case((Node.gpu_used >= num_gpus, Node.gpu_used - num_gpus), else_=0),
+            cpu_used=case((Node.cpu_used >= num_cpus, Node.cpu_used - num_cpus), else_=0),
+            mem_used=case((Node.mem_used >= mem_gb, Node.mem_used - mem_gb), else_=0),
+        )
+    )

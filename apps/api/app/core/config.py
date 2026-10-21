@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,6 +50,11 @@ class Settings(BaseSettings):
     # ---- Scheduler (F4.3) ----
     # Poll interval for the worker's queued-job scan.
     scheduler_interval_seconds: float = 2.0
+    # One-line strategy switch: FIFO (queued_at, id) or priority (desc, then FIFO).
+    scheduler_policy: Literal["fifo", "priority"] = "fifo"
+    # Running jobs hold a lease renewed each cycle; an expired lease means the
+    # worker died and the job is reclaimed (failed + resources released).
+    scheduler_lease_seconds: int = Field(default=60, ge=5, le=3600)
     # Probability that a running job fails on a given poll.  Defaults to 0
     # because a non-zero value on a 2s poll would kill jobs unrealistically
     # fast; enable it only for demos of the failure path.

@@ -50,6 +50,10 @@ class NodeRead(NodeBase):
     id: int
     gpu_used: int
     gpu_free: int
+    cpu_used: int
+    cpu_free: int
+    mem_used: int
+    mem_free: int
     status: NodeStatus
     created_at: datetime
     updated_at: datetime

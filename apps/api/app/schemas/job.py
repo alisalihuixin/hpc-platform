@@ -28,6 +28,12 @@ class JobCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255, examples=["train-resnet"])
     num_nodes: int = Field(ge=1, le=MAX_NODES, examples=[1])
     num_gpus: int = Field(default=0, ge=0, le=MAX_GPUS_PER_JOB, examples=[4])
+    # Per-node slot requests; ``num_nodes`` is a request label and placement is
+    # currently single-node, so these are the totals placed on that node.
+    num_cpus: int = Field(default=0, ge=0, le=MAX_NODES, examples=[8])
+    mem_gb: int = Field(default=0, ge=0, le=1_000_000, examples=[64])
+    # Higher = earlier under the priority policy; ignored by FIFO.
+    priority: int = Field(default=0, ge=0, le=1000, examples=[10])
     walltime_min: int = Field(ge=1, le=MAX_WALLTIME_MIN, examples=[120])
     params: dict[str, Any] = Field(default_factory=dict, examples=[{"image": "pytorch:2.4"}])
 
@@ -41,6 +47,9 @@ class JobRead(BaseModel):
     name: str
     num_nodes: int
     num_gpus: int
+    num_cpus: int
+    mem_gb: int
+    priority: int
     walltime_min: int
     params: dict[str, Any]
     status: JobStatus

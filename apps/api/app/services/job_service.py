@@ -18,6 +18,7 @@ import math
 from datetime import UTC, datetime
 from typing import Any
 
+from redis.asyncio import Redis
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +28,13 @@ from app.core.errors import (
     PermissionDeniedError,
     UnprocessableEntityError,
 )
+from app.core.events import publish_job_event
 from app.db.base import user_groups
 from app.models.group import Group
 from app.models.job import CANCELABLE_STATUSES, Job, JobStatus
 from app.models.user import User
 from app.schemas.job import JobCreate
-from app.services import quota_service
+from app.services import node_service, quota_service
 
 
 async def _member_group(db: AsyncSession, user_id: int, group_id: int) -> Group:
@@ -73,7 +75,9 @@ def _ceiling_errors(payload: JobCreate, *, max_nodes: int, max_gpus: int) -> lis
     return errors
 
 
-async def submit_job(db: AsyncSession, user: User, payload: JobCreate) -> Job:
+async def submit_job(
+    db: AsyncSession, user: User, payload: JobCreate, *, redis: Redis | None = None
+) -> Job:
     """Validate, reserve the GPUs and enqueue - all in one transaction."""
     group = await _member_group(db, user.id, payload.group_id)
     quota = await quota_service.get_quota_or_404(db, group.id)
@@ -97,6 +101,9 @@ async def submit_job(db: AsyncSession, user: User, payload: JobCreate) -> Job:
         name=payload.name,
         num_nodes=payload.num_nodes,
         num_gpus=payload.num_gpus,
+        num_cpus=payload.num_cpus,
+        mem_gb=payload.mem_gb,
+        priority=payload.priority,
         walltime_min=payload.walltime_min,
         params=payload.params,
     )
@@ -104,6 +111,7 @@ async def submit_job(db: AsyncSession, user: User, payload: JobCreate) -> Job:
     # Commits the reservation and the job row together.
     await db.commit()
     await db.refresh(job)
+    await publish_job_event(redis, job_id=job.id, user_id=job.user_id, status=job.status)
     return job
 
 
@@ -195,7 +203,9 @@ async def list_jobs(
     return list(rows.all()), int(total)
 
 
-async def cancel_job(db: AsyncSession, user: User, job_id: int) -> Job:
+async def cancel_job(
+    db: AsyncSession, user: User, job_id: int, *, redis: Redis | None = None
+) -> Job:
     """Cancel a queued/running job (F4.4) and return its reserved GPUs.
 
     The state check and the write are one conditional ``UPDATE`` so two
@@ -203,6 +213,7 @@ async def cancel_job(db: AsyncSession, user: User, job_id: int) -> Job:
     gets a 409 - it must not release quota a second time.
     """
     job = await get_visible_job(db, user, job_id)
+    was_running = job.status == JobStatus.RUNNING.value
 
     result = await db.execute(
         update(Job)
@@ -218,6 +229,18 @@ async def cancel_job(db: AsyncSession, user: User, job_id: int) -> Job:
     if job.num_gpus > 0:
         await quota_service.release(db, job.group_id, job.num_gpus)
 
+    # A running job also holds physical node slots; release them so the node
+    # does not leak capacity when the scheduler never sees a terminal finish.
+    if was_running:
+        await node_service.release_slots(
+            db,
+            node_id=job.node_id,
+            num_gpus=job.num_gpus,
+            num_cpus=job.num_cpus,
+            mem_gb=job.mem_gb,
+        )
+
     await db.commit()
     await db.refresh(job)
+    await publish_job_event(redis, job_id=job.id, user_id=job.user_id, status=job.status)
     return job

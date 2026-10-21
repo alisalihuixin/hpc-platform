@@ -10,8 +10,10 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, status
+from fastapi.responses import StreamingResponse
 
-from app.deps import CurrentUser, SessionDep
+from app.core.events import job_event_stream
+from app.deps import CurrentUser, RedisDep, SessionDep
 from app.models.job import JobStatus
 from app.schemas.job import JobCreate, JobDetail, JobList, JobRead
 from app.services import job_service
@@ -25,8 +27,10 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
     status_code=status.HTTP_201_CREATED,
     summary="Submit a job (validate + reserve quota + enqueue)",
 )
-async def submit_job(payload: JobCreate, db: SessionDep, user: CurrentUser) -> JobRead:
-    job = await job_service.submit_job(db, user, payload)
+async def submit_job(
+    payload: JobCreate, db: SessionDep, user: CurrentUser, redis: RedisDep
+) -> JobRead:
+    job = await job_service.submit_job(db, user, payload, redis=redis)
     return JobRead.model_validate(job)
 
 
@@ -58,6 +62,27 @@ async def list_jobs(
     return JobList(items=[JobRead.model_validate(job) for job in jobs], total=total)
 
 
+@router.get("/stream", summary="Job status stream (SSE)")
+async def stream_jobs(redis: RedisDep, user: CurrentUser) -> StreamingResponse:
+    """Server-Sent Events: ``job.updated`` for the caller's jobs (F4.7).
+
+    Declared before ``/{job_id}`` so "stream" is not parsed as an id.
+    """
+    return StreamingResponse(
+        job_event_stream(
+            redis,
+            user_id=user.id,
+            is_admin=user.has_role("admin"),
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.get("/{job_id}", response_model=JobDetail, summary="Get a job's detail")
 async def get_job_detail(job_id: int, db: SessionDep, user: CurrentUser) -> JobDetail:
     job = await job_service.get_visible_job(db, user, job_id)
@@ -69,6 +94,6 @@ async def get_job_detail(job_id: int, db: SessionDep, user: CurrentUser) -> JobD
 
 
 @router.post("/{job_id}/cancel", response_model=JobRead, summary="Cancel a job")
-async def cancel_job(job_id: int, db: SessionDep, user: CurrentUser) -> JobRead:
-    job = await job_service.cancel_job(db, user, job_id)
+async def cancel_job(job_id: int, db: SessionDep, user: CurrentUser, redis: RedisDep) -> JobRead:
+    job = await job_service.cancel_job(db, user, job_id, redis=redis)
     return JobRead.model_validate(job)
