@@ -254,7 +254,29 @@ D17 作业模型 ─────────────────────
 - **验证**：`npm run typecheck`、`npm run lint`、`npm run build` 全过（11 条路由，shared JS 87.2 kB）；后端 pytest **119 passed** 不变
 - **未验证**：浏览器端到端（本机未启动 PG/Redis/worker）；计划在 D26 SSE 完成后与双浏览器联动一起实测
 
+### D26 · F4.7 SSE 实时推送（后端）—— 已完成
+
+- **产出**：`app/core/events.py`（`publish_job_event` / `job_event_stream`）、`GET /jobs/stream`、各状态变更点接入发布（提交 / 取消 / 调度 / 结束 / worker 轮询）、`tests/test_job_events.py`
+- **通道设计**：单频道 `jobs:events`，消息体 `{type, job_id, user_id, status, at}`；非 admin 在流内按 `user_id` 过滤，admin 收全量；15s 发送 `: ping` 心跳，响应头带 `Cache-Control: no-cache`、`X-Accel-Buffering: no`
+- **发布点**：`submit_job` → `queued`；`cancel_job` → `canceled`；`schedule_once` → `running`；`finish_due_jobs` → `completed` / `failed`；worker 通过 `get_redis()` 注入客户端。发布失败只记 warning，**不影响已提交的事务**
+- **顺带修复**：取消**运行中**作业时同步释放 `node.gpu_used`（此前只返还配额，节点卡会永久泄漏）
+- **证据**：pytest **127 passed**（新增 8 例）；ruff check/format 全过；无新迁移
+- **用例**：发布/订阅往返；`redis=None` 为 no-op；非 admin 过滤他人事件；admin 收全量；未登录 401；提交发布 `queued`；调度 + 取消依次发布 `running`/`canceled` 且节点卡归零；结束发布 `completed`
+- **未验证**：真实 Redis + 浏览器 `EventSource` 联动（D27 前端接入后实测）
+
+### 追加 · 调度层加固（F4.3 / F5.2）—— 已完成
+
+- **产出**：`app/services/scheduling_policy.py`、`scheduler_service` 重构（占位/释放/租约/回收）、迁移 `0006_scheduler_core`、`scripts/demo_scheduler.py`、新增与扩展测试
+- **可插拔策略**：`SchedulingPolicy` Protocol；`FifoPolicy`（`queued_at, id`）与 `PriorityPolicy`（`priority` 降序 → FIFO）；`SCHEDULER_POLICY=fifo|priority` 一行切换（配置用 `Literal` 校验，拼错启动即报错）
+- **资源槽位**：`nodes.cpu_used/mem_used`（含 CHECK）、`jobs.num_cpus/mem_gb/priority`；占位用**一条条件 `UPDATE`** 同时校验 GPU/CPU/内存，释放用 `CASE` 钳位到 0，绝不出现负计数
+- **崩溃回收**：`jobs.lease_expires_at`；每轮调度先 `renew_leases`（只续未过期租约）→ `recover_orphaned_jobs`（过期 running → `failed` + 释放节点槽位 + 写 `usage_events` + 发布 SSE）；历史无租约数据自动收编
+- **demo 暴露并修复的两个真实泄漏**：① 作业自然结束/崩溃回收时**未返还配额**（此前仅取消返还，完成即泄漏）；② 取消运行中作业只释放 GPU、未释放 CPU/内存
+- **demo 实测**：`python scripts/demo_scheduler.py --compare`，100 作业 / 4 节点 × 8 卡 / 每作业 2 卡+8 核+32G
+  - FIFO：14 轮跑完，`{'completed': 100}`，节点 `gpu=cpu=mem=0`，`quota.gpu_used=0`，`usage_events=100`（6.6700 GPU·h）
+  - Priority：同样 100 completed / 零泄漏；首批顺序 `[28,55,82,9,36,63,90,17,44,71]`，FIFO 为 `[1..10]`
+- **证据**：pytest **142 passed**（新增策略 3、调度 6、回收 5、配额返还 1）；ruff 全过；迁移 `base → head → base → head` 通过
+
 ### 下一步
 
-- D26 F4.7 SSE：`GET /jobs/stream`（Redis Pub/Sub 扇出），状态变更实时推送
+- D27 前端 SSE：作业列表/详情接入 `EventSource`，收到 `job.updated` 即刷新（目标 ≤2s）
 

@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ 下一步 M3 D26 SSE 实时推送
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 进行中**（D26 SSE 后端完成）｜ 下一步 D27 前端实时刷新
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -47,16 +47,17 @@ hpc-platform/
 ├── apps/
 │   ├── api/                    # FastAPI 后端
 │   │   ├── app/
-│   │   │   ├── core/           # config / security / redis / rate_limit / errors
+│   │   │   ├── core/           # config / security / redis / rate_limit / events / errors
 │   │   │   ├── db/             # Base、异步引擎、get_db
 │   │   │   ├── models/         # SQLAlchemy 2.0 ORM（users/roles/nodes/groups/quotas/jobs/usage_events）
 │   │   │   ├── schemas/        # Pydantic v2 出入参
-│   │   │   ├── services/       # 业务逻辑（auth / user / node / quota / job / scheduler / billing / usage）
+│   │   │   ├── services/       # 业务逻辑（auth / user / node / quota / job / scheduler / policy / billing / usage）
 │   │   │   ├── routers/        # HTTP 层（auth / users / nodes / quotas / jobs / usage / health）
 │   │   │   ├── deps/           # 依赖注入（会话、Redis、当前用户、RBAC）
 │   │   │   ├── workers/        # ARQ 后台任务（调度轮询 + ping）
 │   │   │   └── main.py         # 应用工厂
-│   │   ├── alembic/            # 迁移（users/roles → nodes → groups/quotas → jobs → usage_events）
+│   │   ├── alembic/            # 迁移（users/roles → nodes → groups/quotas → jobs → usage_events → scheduler core）
+│   │   ├── scripts/            # demo_scheduler.py（100 作业 / 策略对比 / 泄漏断言）
 │   │   └── tests/              # pytest（SQLite + fakeredis，无需外部依赖）
 │   └── web/                    # Next.js 14 (App Router) 前端
 │       ├── src/app/            # 登录 / 概览 / 作业 / 提交 / 详情 / 节点 / 用量 / 用户管理
@@ -101,14 +102,18 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **119 passed**（≈6.3s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 69 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **142 passed**（≈14s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 75 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
 | 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
 | 结束自动计费 | 流水与详情口径一致 | **2 卡 × 61 分钟 = `2.0333` 卡时** | `duration_min=ceil`，`gpu_hours=gpus×min/60` |
 | 冲正对账 | 冲正后净卡时为 0 | **原行保留 + 补偿行，`net_gpu_hours=0`** | 只增不改，重复冲正幂等 |
 | 用量对账 | 明细合计 = 汇总 | **`sum(signed_gpu_hours) == total_gpu_hours`** | `/usage/me` 与组排行均按净额 |
+| 调度策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | `Literal` 校验，拼错启动即失败 |
+| 调度并发不超分 | 多调度器不重复占位 | **两路并发调度 20 作业，恰好 10 个 running / 10 个 queued** | 条件 `UPDATE` + `rowcount` |
+| 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
+| SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D27 浏览器实测 |
 | 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，11 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 类页面 98 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
@@ -187,13 +192,18 @@ hpc-platform/
 - [x] F5.1 冲正：追加 `reversed` 补偿行（只增不改），`net_gpu_hours` 汇总扣除
 - [x] F5.3 个人用量：`/usage/me` 时间段明细，净卡时与汇总对账一致
 - [x] F5.4 组用量排行：`/usage/groups/{id}` 按成员净卡时降序
+- [x] 调度策略可插拔：FIFO / Priority（`SCHEDULER_POLICY` 一行切换）
+- [x] CPU / 内存槽位：与 GPU 用同一条条件 `UPDATE` 原子占位与释放
+- [x] 崩溃回收：作业租约 + 过期 running 置 failed 并回收资源/写流水
+- [x] 100 作业 demo：全终态、零资源泄漏、FIFO/Priority 对比日志
 - [x] M2 前端：`/jobs`、`/jobs/new`、`/jobs/[id]`、`/nodes`、`/usage` + 导航
 
 **交付物**
 
-- 后端：`app/models/{node,group,quota,job,usage_event}.py`、`app/schemas/{node,quota,job,usage}.py`、`app/services/{node_service,quota_service,job_service,scheduler_service,billing_service,usage_service}.py`、`app/routers/{nodes,quotas,jobs,usage}.py`、`app/workers/{tasks,settings}.py`
-- 迁移：`alembic/versions/0002_nodes.py`、`0003_groups_quotas.py`、`0004_jobs.py`、`0005_usage_events.py`
-- 测试：`tests/test_nodes.py`、`tests/test_quota.py`、`tests/test_quota_endpoints.py`、`tests/test_job_model.py`、`tests/test_job_submit.py`、`tests/test_job_cancel_list.py`、`tests/test_job_detail.py`、`tests/test_scheduler.py`、`tests/test_job_finish.py`、`tests/test_billing.py`、`tests/test_usage.py`
+- 后端：`app/models/{node,group,quota,job,usage_event}.py`、`app/schemas/{node,quota,job,usage}.py`、`app/services/{node_service,quota_service,job_service,scheduler_service,scheduling_policy,billing_service,usage_service}.py`、`app/routers/{nodes,quotas,jobs,usage}.py`、`app/workers/{tasks,settings}.py`
+- 迁移：`alembic/versions/0002_nodes.py` … `0005_usage_events.py`、`0006_scheduler_core.py`
+- 脚本：`scripts/demo_scheduler.py`（100 作业 / 策略对比 / 泄漏断言）
+- 测试：`tests/test_nodes.py`、`tests/test_quota.py`、`tests/test_quota_endpoints.py`、`tests/test_job_model.py`、`tests/test_job_submit.py`、`tests/test_job_cancel_list.py`、`tests/test_job_detail.py`、`tests/test_scheduler.py`、`tests/test_scheduling_policy.py`、`tests/test_orphan_recovery.py`、`tests/test_job_finish.py`、`tests/test_billing.py`、`tests/test_usage.py`、`tests/test_job_events.py`
 - 前端：`src/app/(app)/{jobs,jobs/new,jobs/[id],nodes,usage}/page.tsx`、`src/components/JobStatusBadge.tsx`、`src/lib/format.ts`、`src/lib/api/{client,types,schema.d}.ts`
 
 **验收结论**
@@ -216,14 +226,22 @@ hpc-platform/
 | 14 | F5.1 流水只增不改 + 冲正 | ✅ 原行保留、补偿行 `reversed=true`、净卡时 0、重复冲正幂等 |
 | 15 | F5.3 明细合计 = 汇总值 | ✅ `sum(signed_gpu_hours) == total_gpu_hours`（含冲正场景 `1.5`） |
 | 16 | F5.4 排行与明细对账一致 | ✅ 组内成员按净卡时降序，行合计 = `total_gpu_hours` |
-| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过（11 条路由）；浏览器 E2E 待 D26 一并实测 |
+| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过（11 条路由）；浏览器 E2E 待 D27 |
+| 18 | 调度策略一行切换且有差异 | ✅ FIFO 首批 `[1..10]`；Priority 首批 `[28,55,82,9,…]` |
+| 19 | CPU / 内存不足时排队不崩溃 | ✅ 单测：`num_cpus=8` 对 4 核、`mem_gb=16` 对 8G 均保持 queued |
+| 20 | 崩溃回收 | ✅ 租约过期 → failed + 节点槽位归零 + 流水照记（10 分钟） |
+| 21 | 100 作业全终态、无死锁/泄漏 | ✅ 100 completed / 14 轮 / `gpu=cpu=mem=0` / `quota=0` / 100 条流水 |
+| 22 | 并发调度不超分 | ✅ 两路并发调度 20 作业：恰好 10 running、10 queued |
 
 **关键实现**
 
 - 防超卖：[`quota_service.py`](apps/api/app/services/quota_service.py) —— 条件原子 `UPDATE ... WHERE gpu_used + :n <= gpu_limit` + `rowcount` 判定，杜绝读-改-写竞态；`reserve`/`release` 不 commit，由调用方保证「预扣 + 入队」同事务。
 - 作业提交：[`job_service.py`](apps/api/app/services/job_service.py) —— 成员校验 → 组级上限校验（422 字段级）→ 原子预扣（409）→ 入队，③④ 同一事务提交。
 - 取消作业：条件 `UPDATE ... WHERE status IN ('queued','running')` + `rowcount` 判定，终态 409；取消即返还预扣，实际卡时由 `usage_events` 计费（D22）。
-- 调度器：[`scheduler_service.py`](apps/api/app/services/scheduler_service.py) —— FIFO 扫描 queued，选最空闲 online 节点，条件 `UPDATE nodes` 原子占卡后再把作业置 running；每作业独立事务，worker 起始时启动 2s 轮询循环。
+- 调度器：[`scheduler_service.py`](apps/api/app/services/scheduler_service.py) —— 每轮「续租 → 回收孤儿 → 排入 running → 结束到期」；占位用一条条件 `UPDATE` 同时校验 GPU/CPU/内存，放不下就保持 queued；每作业独立事务。
+- 策略抽象：[`scheduling_policy.py`](apps/api/app/services/scheduling_policy.py) —— `SchedulingPolicy` Protocol + `FifoPolicy` / `PriorityPolicy`；`SCHEDULER_POLICY` 一行切换，排序与节点选择解耦。
+- 崩溃回收：`jobs.lease_expires_at` 每轮续租（只续未过期），过期 running 由 `recover_orphaned_jobs` 置 failed、释放槽位、照记卡时并推送事件；旧数据无租约自动收编。
+- 演示脚本：[`demo_scheduler.py`](apps/api/scripts/demo_scheduler.py) —— 100 作业跑完断言全终态 + 节点/配额零残留，并对比 FIFO 与 Priority 首批顺序。
 - 结束计费：[`scheduler_service.py`](apps/api/app/services/scheduler_service.py) —— walltime 到期/故障注入 → 终态 + 释放节点卡 + 追加 `usage_events`（只增不改）；`duration_min` 向上取整，`gpu_hours` 与详情页 `gpu_minutes` 同源。
 - 计费与冲正：[`billing_service.py`](apps/api/app/services/billing_service.py) —— `gpu_hours`（4 位小数）、按 `gpu_model` 固化 `rate_snapshot`（改价不影响历史）、`reverse_job_usage` 追加 `reversed` 补偿行、`net_gpu_hours` 汇总扣减。
 - 用量查询：[`usage_service.py`](apps/api/app/services/usage_service.py) —— 明细按 `started_at` 过滤并逐行给出 `signed_gpu_hours`；组排行 `SUM(CASE reversed THEN -gpu_hours ELSE gpu_hours END)` + `COUNT(DISTINCT job_id)`，保证冲正后仍能对账。
@@ -233,13 +251,37 @@ hpc-platform/
 
 **遗留 / 风险**
 
-- 管理页（节点 CRUD / 配额调整 / 报表）与 SSE 实时刷新属 M3（D26–D32）。
-- 浏览器端到端联调尚未执行（本机未启动 PG/Redis/worker），计划在 D26 SSE 完成后与双浏览器联动一起实测。
+- 管理页（节点 CRUD / 配额调整 / 报表）与 SSE 前端实时刷新属 M3 后续（D27–D32）。
+- 浏览器端到端联调尚未执行（本机未启动 PG/Redis/worker），D27 接入 EventSource 后一起实测。
 - 与 PRD 的偏差（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）已登记在开发计划第 8 节，待统一口径。
 
-### M3 SSE + 管理页 —— ⏳ 下一步（D26–D35）
+### M3 SSE + 管理页 —— ⏳ 进行中（D26 完成）
 
-> 计划见开发计划第 3 节：D26 SSE 实时推送、D27 前端实时刷新、D28–D32 管理页、D33–D35 联调缓冲。
+> 进度见开发计划第 8 节：D27 前端实时刷新、D28–D32 管理页、D33–D35 联调缓冲。
+
+**已完成**
+
+- [x] F4.7 SSE 后端：`GET /jobs/stream` + Redis Pub/Sub，提交 / 取消 / 调度 / 结束四个变更点均发布
+
+**交付物**
+
+- 后端：`app/core/events.py`、[`routers/jobs.py`](apps/api/app/routers/jobs.py) 的 `/jobs/stream`、`tests/test_job_events.py`
+
+**验收结论**
+
+| # | 验收项 | 结论 |
+| --- | --- | --- |
+| 1 | 状态变更即发布、非 admin 只见自己的作业 | ✅ 发布/订阅往返、用户过滤、四处变更点单测覆盖 |
+| 2 | 双浏览器 ≤2s 刷新 | ⏳ 待 D27 接入 `EventSource` 后实测 |
+
+**关键实现**
+
+- 单频道 `jobs:events`，消息 `{type, job_id, user_id, status, at}`；流内按 `user_id` 过滤（admin 全量），15s `: ping` 心跳；发布失败只告警、不影响已提交事务。
+- 顺带修复：取消运行中作业时释放 `node.gpu_used`，避免节点卡泄漏。
+
+**遗留**
+
+- 真实 Redis + 浏览器 `EventSource` 联动尚未实测（D27 随前端一起验证）。
 
 ---
 
@@ -333,7 +375,8 @@ npm run dev                      # :3000；/api/** 由 next.config.mjs 的 rewri
 | POST | `/jobs` | 登录 | 提交作业（校验 + 配额预扣 + 入队，201） |
 | GET | `/jobs` | 登录 | 作业列表（分页 + 状态/时间筛选；user 仅自己、admin 全部） |
 | GET | `/jobs/{id}` | 本人/admin | 作业详情（资源/起止/消耗卡时 + mock 日志） |
-| POST | `/jobs/{id}/cancel` | 本人/admin | 取消作业（终态 409，返还预扣） |
+| GET | `/jobs/stream` | 登录 | SSE 状态推送（`job.updated`；非 admin 仅自己的作业） |
+| POST | `/jobs/{id}/cancel` | 本人/admin | 取消作业（终态 409，返还预扣与节点卡） |
 | GET | `/usage/me` | 登录 | 我的卡时明细（`since`/`until`，净额对账） |
 | GET | `/usage/groups/{group_id}` | admin | 组内成员用量排行（净卡时降序） |
 | GET | `/health` · `/health/ready` | 匿名 | 存活 / 就绪（检查 PG + Redis） |
@@ -396,6 +439,13 @@ make migrate / makemigration m="..." / seed
 make test / lint / fmt          # 质量保障
 make gen-api                    # 从 OpenAPI 重新生成前端类型
 make fe-dev / api-dev           # 分别起前端 / 后端
+```
+
+调度层 demo（默认自建 SQLite 库，不需要 PG/Redis）：
+
+```powershell
+cd apps/api
+.\.venv\Scripts\python.exe scripts\demo_scheduler.py --compare   # 100 作业，FIFO vs Priority
 ```
 
 CI（`.github/workflows/ci.yml`）：后端 `ruff check` + `ruff format --check` + `pytest`；前端 `next lint` + `next build`；另校验 `docker compose config`。
