@@ -105,8 +105,12 @@ export default function NodesPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-slate-600">{node.gpu_model ?? '—'}</td>
-                    <td className="px-4 py-3 text-slate-600">{node.cpu_cores} 核</td>
-                    <td className="px-4 py-3 text-slate-600">{node.mem_gb} GB</td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {node.cpu_used}/{node.cpu_cores} 核
+                    </td>
+                    <td className="px-4 py-3 text-slate-600">
+                      {node.mem_used}/{node.mem_gb} GB
+                    </td>
                   </tr>
                 );
               })}

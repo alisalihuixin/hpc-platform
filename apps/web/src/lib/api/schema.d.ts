@@ -231,6 +231,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job status stream (SSE)
+         * @description Server-Sent Events: ``job.updated`` for the caller's jobs (F4.7).
+         *
+         *     Declared before ``/{job_id}`` so "stream" is not parsed as an id.
+         */
+        get: operations["stream_jobs_api_v1_jobs_stream_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -343,6 +365,21 @@ export interface components {
              * @default 0
              */
             num_gpus: number;
+            /**
+             * Num Cpus
+             * @default 0
+             */
+            num_cpus: number;
+            /**
+             * Mem Gb
+             * @default 0
+             */
+            mem_gb: number;
+            /**
+             * Priority
+             * @default 0
+             */
+            priority: number;
             /** Walltime Min */
             walltime_min: number;
             /** Params */
@@ -367,6 +404,12 @@ export interface components {
             num_nodes: number;
             /** Num Gpus */
             num_gpus: number;
+            /** Num Cpus */
+            num_cpus: number;
+            /** Mem Gb */
+            mem_gb: number;
+            /** Priority */
+            priority: number;
             /** Walltime Min */
             walltime_min: number;
             /** Params */
@@ -424,6 +467,12 @@ export interface components {
             num_nodes: number;
             /** Num Gpus */
             num_gpus: number;
+            /** Num Cpus */
+            num_cpus: number;
+            /** Mem Gb */
+            mem_gb: number;
+            /** Priority */
+            priority: number;
             /** Walltime Min */
             walltime_min: number;
             /** Params */
@@ -533,6 +582,14 @@ export interface components {
             gpu_used: number;
             /** Gpu Free */
             gpu_free: number;
+            /** Cpu Used */
+            cpu_used: number;
+            /** Cpu Free */
+            cpu_free: number;
+            /** Mem Used */
+            mem_used: number;
+            /** Mem Free */
+            mem_free: number;
             status: components["schemas"]["NodeStatus"];
             /**
              * Created At
@@ -1409,6 +1466,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stream_jobs_api_v1_jobs_stream_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

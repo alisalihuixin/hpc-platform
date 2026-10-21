@@ -137,7 +137,8 @@ export default function JobsPage() {
                     <JobStatusBadge status={job.status} />
                   </td>
                   <td className="px-4 py-3 text-slate-600">
-                    {job.num_nodes} 节点 / {job.num_gpus} 卡
+                    {job.num_nodes} 节点 · {job.num_gpus} 卡 · {job.num_cpus} 核 ·{' '}
+                    {job.mem_gb} GB
                   </td>
                   <td className="px-4 py-3 text-slate-600">{job.walltime_min} 分钟</td>
                   <td className="px-4 py-3 text-slate-500">{formatDateTime(job.queued_at)}</td>

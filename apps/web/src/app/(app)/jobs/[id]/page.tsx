@@ -118,6 +118,8 @@ export default function JobDetailPage() {
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetaItem label="节点数" value={`${job.num_nodes} 节点`} />
         <MetaItem label="GPU 数" value={`${job.num_gpus} 卡`} />
+        <MetaItem label="CPU / 内存" value={`${job.num_cpus} 核 / ${job.mem_gb} GB`} />
+        <MetaItem label="优先级" value={job.priority} />
         <MetaItem label="walltime" value={`${job.walltime_min} 分钟`} />
         <MetaItem label="消耗卡时" value={`${job.gpu_minutes} GPU·分钟`} />
         <MetaItem label="分配节点" value={job.node_id ? `node #${job.node_id}` : '未分配'} />

@@ -14,6 +14,9 @@ export default function NewJobPage() {
   const [name, setName] = useState('train-job');
   const [numNodes, setNumNodes] = useState('1');
   const [numGpus, setNumGpus] = useState('1');
+  const [numCpus, setNumCpus] = useState('8');
+  const [memGb, setMemGb] = useState('32');
+  const [priority, setPriority] = useState('0');
   const [walltime, setWalltime] = useState('60');
   const [paramsText, setParamsText] = useState('{}');
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,9 @@ export default function NewJobPage() {
 
   const nodes = Number(numNodes);
   const gpus = Number(numGpus);
+  const cpus = Number(numCpus);
+  const memory = Number(memGb);
+  const jobPriority = Number(priority);
   const walltimeMin = Number(walltime);
 
   const validation: string[] = [];
@@ -54,6 +60,11 @@ export default function NewJobPage() {
   if (!quota) validation.push('请选择资源组');
   if (!Number.isInteger(nodes) || nodes < 1) validation.push('节点数必须是 ≥ 1 的整数');
   if (!Number.isInteger(gpus) || gpus < 0) validation.push('GPU 数必须是 ≥ 0 的整数');
+  if (!Number.isInteger(cpus) || cpus < 0) validation.push('CPU 核数必须是 ≥ 0 的整数');
+  if (!Number.isInteger(memory) || memory < 0) validation.push('内存必须是 ≥ 0 的整数（GB）');
+  if (!Number.isInteger(jobPriority) || jobPriority < 0 || jobPriority > 1000) {
+    validation.push('优先级必须在 0–1000 之间');
+  }
   if (!Number.isInteger(walltimeMin) || walltimeMin < 1) validation.push('walltime 必须 ≥ 1 分钟');
   if (quota && nodes > quota.max_nodes_per_job) {
     validation.push(`节点数超过本组单作业上限（${quota.max_nodes_per_job}）`);
@@ -88,6 +99,9 @@ export default function NewJobPage() {
       name: name.trim(),
       num_nodes: nodes,
       num_gpus: gpus,
+      num_cpus: cpus,
+      mem_gb: memory,
+      priority: jobPriority,
       walltime_min: walltimeMin,
       params,
     };
@@ -192,6 +206,40 @@ export default function NewJobPage() {
                 min={1}
                 value={walltime}
                 onChange={(event) => setWalltime(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block text-sm">
+              <span className="text-slate-600">CPU 核数</span>
+              <input
+                type="number"
+                min={0}
+                value={numCpus}
+                onChange={(event) => setNumCpus(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600">内存（GB）</span>
+              <input
+                type="number"
+                min={0}
+                value={memGb}
+                onChange={(event) => setMemGb(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="text-slate-600">优先级（越高越先）</span>
+              <input
+                type="number"
+                min={0}
+                max={1000}
+                value={priority}
+                onChange={(event) => setPriority(event.target.value)}
                 className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
               />
             </label>
