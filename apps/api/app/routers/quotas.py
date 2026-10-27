@@ -6,7 +6,9 @@ capacity; the other two are admin-only.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
 
 from app.deps import CurrentUser, SessionDep, require_roles
 from app.schemas.quota import QuotaList, QuotaRead, QuotaUpdate
@@ -15,6 +17,21 @@ from app.services import quota_service
 router = APIRouter(prefix="/quotas", tags=["quotas"])
 
 admin_only = [Depends(require_roles("admin"))]
+
+
+@router.get(
+    "",
+    response_model=QuotaList,
+    dependencies=admin_only,
+    summary="List all group quotas (admin)",
+)
+async def list_quotas(
+    db: SessionDep,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+) -> QuotaList:
+    quotas, total = await quota_service.list_quotas(db, skip=skip, limit=limit)
+    return QuotaList(items=[QuotaRead.model_validate(quota) for quota in quotas], total=total)
 
 
 # Declared before ``/{group_id}`` so "me" is not parsed as a path id.

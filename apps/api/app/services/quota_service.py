@@ -9,7 +9,7 @@ reservation and the job enqueue stay atomic.
 
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError, ConflictError, NotFoundError
@@ -40,6 +40,21 @@ async def list_user_quotas(db: AsyncSession, user_id: int) -> list[Quota]:
         .order_by(Group.name)
     )
     return list(rows.all())
+
+
+async def list_quotas(
+    db: AsyncSession, *, skip: int = 0, limit: int = 100
+) -> tuple[list[Quota], int]:
+    """All group quotas for the admin management page (F3.4)."""
+    total = await db.scalar(select(func.count()).select_from(Quota)) or 0
+    rows = await db.scalars(
+        select(Quota)
+        .join(Group, Group.id == Quota.group_id)
+        .order_by(Group.name)
+        .offset(skip)
+        .limit(limit)
+    )
+    return list(rows.all()), int(total)
 
 
 async def update_quota(db: AsyncSession, group_id: int, payload: QuotaUpdate) -> Quota:

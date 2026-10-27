@@ -63,6 +63,22 @@ async def test_non_admin_cannot_read_group_quota(client: AsyncClient, seeded, te
     assert (await client.get(f"{API}/quotas/{team_group}", headers=headers)).status_code == 403
 
 
+async def test_admin_lists_all_quotas(client: AsyncClient, seeded, team_group) -> None:
+    headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    response = await client.get(f"{API}/quotas", headers=headers)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] == 1
+    assert body["items"][0]["group_id"] == team_group
+    assert body["items"][0]["group_name"] == "team-quota"
+
+
+async def test_non_admin_cannot_list_quotas(client: AsyncClient, seeded, team_group) -> None:
+    headers = await auth_headers(client, USER_EMAIL, USER_PASSWORD)
+    assert (await client.get(f"{API}/quotas", headers=headers)).status_code == 403
+
+
 async def test_admin_reads_group_quota(client: AsyncClient, seeded, team_group) -> None:
     headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
     response = await client.get(f"{API}/quotas/{team_group}", headers=headers)
