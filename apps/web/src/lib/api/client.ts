@@ -31,6 +31,7 @@ import type {
   UserCreate,
   UserList,
   UserRead,
+  UserUpdate,
   UserUsage,
 } from './types';
 
@@ -212,6 +213,13 @@ export const usersApi = {
   async create(payload: UserCreate): Promise<UserRead> {
     return request<UserRead>(endpoints.users, {
       method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async update(userId: number, payload: UserUpdate): Promise<UserRead> {
+    return request<UserRead>(`${endpoints.users}/${userId}`, {
+      method: 'PATCH',
       body: JSON.stringify(payload),
     });
   },

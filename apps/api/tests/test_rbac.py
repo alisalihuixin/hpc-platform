@@ -102,3 +102,47 @@ async def test_deactivated_user_is_rejected(client: AsyncClient, seeded) -> None
         f"{API}/auth/login", json={"username": USER_EMAIL, "password": USER_PASSWORD}
     )
     assert relogin.status_code == 403
+
+
+async def test_admin_resets_password_and_old_one_is_rejected(
+    client: AsyncClient, seeded
+) -> None:
+    admin_headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    listing = await client.get(f"{API}/users", headers=admin_headers)
+    user_id = next(u["id"] for u in listing.json()["items"] if u["email"] == USER_EMAIL)
+
+    patched = await client.patch(
+        f"{API}/users/{user_id}",
+        headers=admin_headers,
+        json={"password": "reset-pass-123"},
+    )
+    assert patched.status_code == 200, patched.text
+
+    old = await client.post(
+        f"{API}/auth/login", json={"username": USER_EMAIL, "password": USER_PASSWORD}
+    )
+    assert old.status_code == 401
+
+    new = await client.post(
+        f"{API}/auth/login", json={"username": USER_EMAIL, "password": "reset-pass-123"}
+    )
+    assert new.status_code == 200
+
+
+async def test_role_change_takes_effect_without_relogin(client: AsyncClient, seeded) -> None:
+    admin_headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    user_headers = await auth_headers(client, USER_EMAIL, USER_PASSWORD)
+    assert (await client.get(f"{API}/users", headers=user_headers)).status_code == 403
+
+    listing = await client.get(f"{API}/users", headers=admin_headers)
+    user_id = next(u["id"] for u in listing.json()["items"] if u["email"] == USER_EMAIL)
+
+    patched = await client.patch(
+        f"{API}/users/{user_id}", headers=admin_headers, json={"roles": ["admin"]}
+    )
+    assert patched.status_code == 200, patched.text
+    assert [role["name"] for role in patched.json()["roles"]] == ["admin"]
+
+    # RBAC reads roles from the database per request, so the older access token
+    # gains the new permission immediately.
+    assert (await client.get(f"{API}/users", headers=user_headers)).status_code == 200
