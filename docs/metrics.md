@@ -8,7 +8,7 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **144 passed**（≈8.2s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **146 passed**（≈9.1s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -18,7 +18,8 @@
 | 冲正对账 | 冲正后净卡时为 0 | **原行保留 + 补偿行，`net_gpu_hours=0`** | 只增不改 |
 | 用量对账 | 明细合计 = 汇总 | **`sum(signed_gpu_hours) == total_gpu_hours`** | 含冲正场景 |
 | 策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | 首批顺序不同（见 §2.2） |
-| 前端构建 | 成功 | **typecheck + lint + build 全过，12 条路由** | Next 14.2.15 |
+| 前端构建 | 成功 | **typecheck + lint + build 全过，13 条路由** | Next 14.2.15 |
+| 用户管理 | 重置密码即刻生效 | **旧密码 401 / 新密码 200；改角色无需重新登录即生效** | `PATCH /users/{id}` |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 98.8 kB；/admin/quotas 91.8 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0006）** | SQLite 验证 |
 

@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 进行中**（D26–D27 SSE、D29 节点管理、D30 配额管理完成；D28 双浏览器验收受环境阻塞）｜ 下一步 D31 用户管理
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 进行中**（D26–D27 SSE、D29 节点管理、D30 配额管理、D31 用户管理完成；D28 双浏览器验收受环境阻塞）｜ 下一步 D32 用户组管理
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -103,7 +103,7 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **144 passed**（≈8.2s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **146 passed**（≈9.1s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
@@ -116,7 +116,7 @@ hpc-platform/
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
 | SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D28 浏览器实测 |
 | 前端 SSE 刷新 | 收到事件即刷新 | **fetch 流式 + 401 刷新重连；列表 300ms 去抖** | 代码已接入，端到端待 D28 |
-| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，12 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
+| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，13 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 98.7 kB；/admin/nodes 99.1 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
@@ -253,13 +253,13 @@ hpc-platform/
 
 **遗留 / 风险**
 
-- 用户 / 组管理页与报表属 M3 后续（D31–D32）。
+- 组管理页与报表属 M3 后续（D32、M4）。
 - 浏览器端到端联调尚未执行（Docker 未运行、本机 Redis 需密码），环境恢复后按 D28 统一实测。
 - 与 PRD 的偏差（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）已登记在开发计划第 8 节，待统一口径。
 
-### M3 SSE + 管理页 —— ⏳ 进行中（D26–D27、D29–D30 完成）
+### M3 SSE + 管理页 —— ⏳ 进行中（D26–D27、D29–D31 完成）
 
-> 进度见开发计划第 8 节：D28 双浏览器验收受环境阻塞，D31–D32 管理页继续。
+> 进度见开发计划第 8 节：D28 双浏览器验收受环境阻塞，D32 组管理页继续。
 
 **已完成**
 
@@ -267,12 +267,13 @@ hpc-platform/
 - [x] F4.7 前端：fetch 流式订阅 `job.updated`，列表 300ms 合并刷新、详情按作业过滤并保留 3s 轮询兜底
 - [x] F2.2 管理-节点页：`/admin/nodes` 注册 / 编辑 / 删除 + 在线状态切换（offline / draining 不再接收新作业）
 - [x] F3.4 管理-配额页：`/admin/quotas` 全量列表 + 编辑；`gpu_limit` 不得低于已用
+- [x] F8.1 管理-用户页：`/admin/users` 新建用户 / 分配角色 / 启用禁用 / 重置密码
 
 **交付物**
 
 - 后端：`app/core/events.py`、[`routers/jobs.py`](apps/api/app/routers/jobs.py) 的 `/jobs/stream`、[`routers/quotas.py`](apps/api/app/routers/quotas.py) 的 `GET /quotas`、`tests/test_job_events.py`
 - 前端：[`job-events.ts`](apps/web/src/lib/api/job-events.ts)、[`useJobEvents.ts`](apps/web/src/hooks/useJobEvents.ts)，接入 `/jobs` 与 `/jobs/[id]`
-- 前端：[`admin/nodes/page.tsx`](apps/web/src/app/(app)/admin/nodes/page.tsx)、[`admin/quotas/page.tsx`](apps/web/src/app/(app)/admin/quotas/page.tsx)、`nodesApi` / `quotasApi` 管理方法
+- 前端：[`admin/nodes/page.tsx`](apps/web/src/app/(app)/admin/nodes/page.tsx)、[`admin/quotas/page.tsx`](apps/web/src/app/(app)/admin/quotas/page.tsx)、[`admin/users/page.tsx`](apps/web/src/app/(app)/admin/users/page.tsx)、`nodesApi` / `quotasApi` / `usersApi` 管理方法
 
 **验收结论**
 
@@ -283,6 +284,7 @@ hpc-platform/
 | 3 | 双浏览器 ≤2s 刷新 | ⏳ 环境阻塞：Docker 未运行、本机 Redis 需密码 |
 | 4 | 下线节点不再接收新作业 | ✅ 调度器用例覆盖 offline / draining 跳过 |
 | 5 | 调低配额不杀在跑作业 | ✅ 仅改上限；`gpu_limit < gpu_used` 返回 409（前后端双校验） |
+| 6 | 用户管理：新用户可登录、角色即时生效 | ✅ 重置密码后旧密码 401；改角色后旧 token 直接获得新权限（RBAC 每请求读库） |
 
 **关键实现**
 
