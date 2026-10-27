@@ -1,7 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useAuth } from '@/components/AuthProvider';
 import { ApiError, nodesApi } from '@/lib/api/client';
 import type { NodeRead, NodeStatus } from '@/lib/api/types';
 
@@ -12,6 +14,7 @@ const STATUS_STYLES: Record<NodeStatus, { label: string; className: string }> = 
 };
 
 export default function NodesPage() {
+  const { isAdmin } = useAuth();
   const [nodes, setNodes] = useState<NodeRead[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -44,13 +47,20 @@ export default function NodesPage() {
             只读资源视图（F2.3）：GPU 占用实时反映调度器分配结果。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void load()}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-        >
-          刷新
-        </button>
+        <div className="flex items-center gap-3">
+          {isAdmin ? (
+            <Link href="/admin/nodes" className="text-sm text-brand-600 hover:underline">
+              节点管理 →
+            </Link>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void load()}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            刷新
+          </button>
+        </div>
       </header>
 
       {error ? (

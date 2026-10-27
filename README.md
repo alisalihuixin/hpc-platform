@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 进行中**（D26 SSE 后端完成）｜ 下一步 D27 前端实时刷新
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 进行中**（D26–D27 SSE、D29 节点管理、D30 配额管理完成；D28 双浏览器验收受环境阻塞）｜ 下一步 D31 用户管理
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -60,8 +60,9 @@ hpc-platform/
 │   │   ├── scripts/            # demo_scheduler.py（100 作业 / 策略对比 / 泄漏断言）
 │   │   └── tests/              # pytest（SQLite + fakeredis，无需外部依赖）
 │   └── web/                    # Next.js 14 (App Router) 前端
-│       ├── src/app/            # 登录 / 概览 / 作业 / 提交 / 详情 / 节点 / 用量 / 用户管理
-│       ├── src/lib/api/        # openapi-typescript 生成的类型 + 类型化 client
+│       ├── src/app/            # 登录 / 概览 / 作业 / 节点 / 节点管理 / 配额管理 / 用量 / 用户管理
+│       ├── src/hooks/          # useJobEvents（SSE 订阅生命周期）
+│       ├── src/lib/api/        # openapi-typescript 生成的类型 + 类型化 client + SSE
 │       └── scripts/gen-api.mjs # 从 /openapi.json 重新生成类型
 ├── deploy/Caddyfile            # 反向代理：/api → FastAPI，其余 → Next.js
 ├── docker-compose.yml          # api + postgres + redis + web + caddy
@@ -102,8 +103,8 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **142 passed**（≈14s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 75 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **144 passed**（≈8.2s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
 | 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
@@ -113,9 +114,10 @@ hpc-platform/
 | 调度策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | `Literal` 校验，拼错启动即失败 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发调度 20 作业，恰好 10 个 running / 10 个 queued** | 条件 `UPDATE` + `rowcount` |
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
-| SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D27 浏览器实测 |
-| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，11 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 类页面 98 kB** | `next build` 输出 |
+| SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D28 浏览器实测 |
+| 前端 SSE 刷新 | 收到事件即刷新 | **fetch 流式 + 401 刷新重连；列表 300ms 去抖** | 代码已接入，端到端待 D28 |
+| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，12 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
+| 前端首屏 JS | — | **shared 87.2 kB；/jobs 98.7 kB；/admin/nodes 99.1 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
@@ -226,7 +228,7 @@ hpc-platform/
 | 14 | F5.1 流水只增不改 + 冲正 | ✅ 原行保留、补偿行 `reversed=true`、净卡时 0、重复冲正幂等 |
 | 15 | F5.3 明细合计 = 汇总值 | ✅ `sum(signed_gpu_hours) == total_gpu_hours`（含冲正场景 `1.5`） |
 | 16 | F5.4 排行与明细对账一致 | ✅ 组内成员按净卡时降序，行合计 = `total_gpu_hours` |
-| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过（11 条路由）；浏览器 E2E 待 D27 |
+| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过；浏览器 E2E 待 D27 |
 | 18 | 调度策略一行切换且有差异 | ✅ FIFO 首批 `[1..10]`；Priority 首批 `[28,55,82,9,…]` |
 | 19 | CPU / 内存不足时排队不崩溃 | ✅ 单测：`num_cpus=8` 对 4 核、`mem_gb=16` 对 8G 均保持 queued |
 | 20 | 崩溃回收 | ✅ 租约过期 → failed + 节点槽位归零 + 流水照记（10 分钟） |
@@ -251,37 +253,47 @@ hpc-platform/
 
 **遗留 / 风险**
 
-- 管理页（节点 CRUD / 配额调整 / 报表）与 SSE 前端实时刷新属 M3 后续（D27–D32）。
-- 浏览器端到端联调尚未执行（本机未启动 PG/Redis/worker），D27 接入 EventSource 后一起实测。
+- 用户 / 组管理页与报表属 M3 后续（D31–D32）。
+- 浏览器端到端联调尚未执行（Docker 未运行、本机 Redis 需密码），环境恢复后按 D28 统一实测。
 - 与 PRD 的偏差（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）已登记在开发计划第 8 节，待统一口径。
 
-### M3 SSE + 管理页 —— ⏳ 进行中（D26 完成）
+### M3 SSE + 管理页 —— ⏳ 进行中（D26–D27、D29–D30 完成）
 
-> 进度见开发计划第 8 节：D27 前端实时刷新、D28–D32 管理页、D33–D35 联调缓冲。
+> 进度见开发计划第 8 节：D28 双浏览器验收受环境阻塞，D31–D32 管理页继续。
 
 **已完成**
 
 - [x] F4.7 SSE 后端：`GET /jobs/stream` + Redis Pub/Sub，提交 / 取消 / 调度 / 结束四个变更点均发布
+- [x] F4.7 前端：fetch 流式订阅 `job.updated`，列表 300ms 合并刷新、详情按作业过滤并保留 3s 轮询兜底
+- [x] F2.2 管理-节点页：`/admin/nodes` 注册 / 编辑 / 删除 + 在线状态切换（offline / draining 不再接收新作业）
+- [x] F3.4 管理-配额页：`/admin/quotas` 全量列表 + 编辑；`gpu_limit` 不得低于已用
 
 **交付物**
 
-- 后端：`app/core/events.py`、[`routers/jobs.py`](apps/api/app/routers/jobs.py) 的 `/jobs/stream`、`tests/test_job_events.py`
+- 后端：`app/core/events.py`、[`routers/jobs.py`](apps/api/app/routers/jobs.py) 的 `/jobs/stream`、[`routers/quotas.py`](apps/api/app/routers/quotas.py) 的 `GET /quotas`、`tests/test_job_events.py`
+- 前端：[`job-events.ts`](apps/web/src/lib/api/job-events.ts)、[`useJobEvents.ts`](apps/web/src/hooks/useJobEvents.ts)，接入 `/jobs` 与 `/jobs/[id]`
+- 前端：[`admin/nodes/page.tsx`](apps/web/src/app/(app)/admin/nodes/page.tsx)、[`admin/quotas/page.tsx`](apps/web/src/app/(app)/admin/quotas/page.tsx)、`nodesApi` / `quotasApi` 管理方法
 
 **验收结论**
 
 | # | 验收项 | 结论 |
 | --- | --- | --- |
 | 1 | 状态变更即发布、非 admin 只见自己的作业 | ✅ 发布/订阅往返、用户过滤、四处变更点单测覆盖 |
-| 2 | 双浏览器 ≤2s 刷新 | ⏳ 待 D27 接入 `EventSource` 后实测 |
+| 2 | 前端收到 `job.updated` 即刷新 | ✅ 代码已接入（列表去抖 / 详情过滤） |
+| 3 | 双浏览器 ≤2s 刷新 | ⏳ 环境阻塞：Docker 未运行、本机 Redis 需密码 |
+| 4 | 下线节点不再接收新作业 | ✅ 调度器用例覆盖 offline / draining 跳过 |
+| 5 | 调低配额不杀在跑作业 | ✅ 仅改上限；`gpu_limit < gpu_used` 返回 409（前后端双校验） |
 
 **关键实现**
 
 - 单频道 `jobs:events`，消息 `{type, job_id, user_id, status, at}`；流内按 `user_id` 过滤（admin 全量），15s `: ping` 心跳；发布失败只告警、不影响已提交事务。
+- 前端订阅：[`job-events.ts`](apps/web/src/lib/api/job-events.ts) —— `fetch` + `ReadableStream` 解析 SSE（Bearer 头，避免 token 进 URL），401 先刷新令牌再重连；列表 300ms 去抖，详情按 `job_id` 过滤。
+- 配额管理：`GET /quotas`（admin 全量）+ `/admin/quotas` 编辑；`gpu_limit ≥ gpu_used` 前后端双校验，调低只影响后续提交。
 - 顺带修复：取消运行中作业时释放 `node.gpu_used`，避免节点卡泄漏。
 
 **遗留**
 
-- 真实 Redis + 浏览器 `EventSource` 联动尚未实测（D27 随前端一起验证）。
+- 真实 Redis + 浏览器 SSE 联动待 D28 起服务实测（双浏览器 ≤2s 同步）。
 
 ---
 
@@ -371,6 +383,7 @@ npm run dev                      # :3000；/api/** 由 next.config.mjs 的 rewri
 | GET | `/nodes` · `/nodes/{id}` | 登录 | 节点列表 / 详情（只读资源视图，含 `gpu_free`） |
 | POST / PATCH / DELETE | `/nodes` · `/nodes/{id}` | admin | 节点增删改（含上下线 / draining） |
 | GET | `/quotas/me` | 登录 | 我所属各组的配额余量 |
+| GET | `/quotas` | admin | 全部组配额列表（管理页） |
 | GET / PATCH | `/quotas/{group_id}` | admin | 查询 / 调整组配额 |
 | POST | `/jobs` | 登录 | 提交作业（校验 + 配额预扣 + 入队，201） |
 | GET | `/jobs` | 登录 | 作业列表（分页 + 状态/时间筛选；user 仅自己、admin 全部） |

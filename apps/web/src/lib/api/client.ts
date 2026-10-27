@@ -18,9 +18,14 @@ import type {
   LoginRequest,
   LogoutRequest,
   Message,
+  NodeCreate,
   NodeList,
+  NodeRead,
   NodeStatus,
+  NodeUpdate,
   QuotaList,
+  QuotaRead,
+  QuotaUpdate,
   RefreshRequest,
   Token,
   UserCreate,
@@ -33,6 +38,7 @@ import type {
 // already carry the `/api/v1` prefix (Caddy routes `/api/*` to the backend),
 // so adding a base path here would double it.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
+export const apiBase = API_BASE;
 
 const ACCESS_TOKEN_KEY = 'hpc.access_token';
 const REFRESH_TOKEN_KEY = 'hpc.refresh_token';
@@ -46,6 +52,8 @@ export const endpoints = {
   users: '/api/v1/users',
   nodes: '/api/v1/nodes',
   jobs: '/api/v1/jobs',
+  jobsStream: '/api/v1/jobs/stream',
+  quotas: '/api/v1/quotas',
   quotasMe: '/api/v1/quotas/me',
   usageMe: '/api/v1/usage/me',
 } satisfies Record<string, keyof paths>;
@@ -147,7 +155,7 @@ async function request<T>(
 }
 
 /** Attempt a silent refresh; returns false when the refresh token is unusable. */
-async function tryRefresh(): Promise<boolean> {
+export async function tryRefresh(): Promise<boolean> {
   const refreshToken = getRefreshToken();
   if (!refreshToken) return false;
   try {
@@ -244,12 +252,41 @@ export const nodesApi = {
   async list(status?: NodeStatus): Promise<NodeList> {
     return request<NodeList>(`${endpoints.nodes}${query({ status, limit: 200 })}`);
   },
+
+  async create(payload: NodeCreate): Promise<NodeRead> {
+    return request<NodeRead>(endpoints.nodes, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async update(nodeId: number, payload: NodeUpdate): Promise<NodeRead> {
+    return request<NodeRead>(`${endpoints.nodes}/${nodeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(nodeId: number): Promise<void> {
+    return request<void>(`${endpoints.nodes}/${nodeId}`, { method: 'DELETE' });
+  },
 };
 
 // ---- F3 quotas -----------------------------------------------------------
 export const quotasApi = {
   async mine(): Promise<QuotaList> {
     return request<QuotaList>(endpoints.quotasMe);
+  },
+
+  async list(skip = 0, limit = 100): Promise<QuotaList> {
+    return request<QuotaList>(`${endpoints.quotas}${query({ skip, limit })}`);
+  },
+
+  async update(groupId: number, payload: QuotaUpdate): Promise<QuotaRead> {
+    return request<QuotaRead>(`${endpoints.quotas}/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
   },
 };
 

@@ -251,7 +251,7 @@ D17 作业模型 ─────────────────────
 - **产出**：页面 `/jobs`、`/jobs/new`、`/jobs/[id]`、`/nodes`、`/usage`；`AppShell` 导航（作业 / 提交作业 / 节点 / 我的用量）；`lib/api/client.ts` 新增 `jobsApi` / `nodesApi` / `quotasApi` / `usageApi`，`types.ts` 扩展 F2–F5 类型；`components/JobStatusBadge.tsx`、`lib/format.ts`；`schema.d.ts` 由当前 OpenAPI 重新生成（17 条路径）
 - **交互**：作业列表支持状态筛选、取消与刷新；提交页从 `/quotas/me` 取组与余量，前端按「组上限 + 当前余量 + params JSON」同规则预校验；详情页 `queued`/`running` 时每 3s 轮询（SSE 留给 D26）；用量页按时间段筛选并展示净卡时与冲正标记
 - **体验细节**：`parseError` 支持 FastAPI 422 的 `detail[]` 字段消息；导航高亮取最长前缀，避免 `/jobs/new` 同时点亮 `/jobs`
-- **验证**：`npm run typecheck`、`npm run lint`、`npm run build` 全过（11 条路由，shared JS 87.2 kB）；后端 pytest **119 passed** 不变
+- **验证**：`npm run typecheck`、`npm run lint`、`npm run build` 全过（10 条路由，shared JS 87.2 kB）；后端 pytest **119 passed** 不变
 - **未验证**：浏览器端到端（本机未启动 PG/Redis/worker）；计划在 D26 SSE 完成后与双浏览器联动一起实测
 
 ### D26 · F4.7 SSE 实时推送（后端）—— 已完成
@@ -276,7 +276,37 @@ D17 作业模型 ─────────────────────
   - Priority：同样 100 completed / 零泄漏；首批顺序 `[28,55,82,9,36,63,90,17,44,71]`，FIFO 为 `[1..10]`
 - **证据**：pytest **142 passed**（新增策略 3、调度 6、回收 5、配额返还 1）；ruff 全过；迁移 `base → head → base → head` 通过
 
+### D27 · F4.7 前端 SSE 实时刷新 —— 已完成
+
+- **产出**：`lib/api/job-events.ts`（fetch + `ReadableStream` 解析 SSE 帧）、`hooks/useJobEvents.ts`（组件生命周期内保持订阅）、作业列表 300ms 合并刷新、详情页按 `job_id` 过滤 + 保留 3s 轮询兜底
+- **设计取舍**：不使用原生 `EventSource`——它无法设置 `Authorization` 头，把 token 放进 URL 会进入访问日志；改用 `fetch` 携带 Bearer 头流式读取，401 时先刷新令牌再重连，断线 3s 自动重连
+- **刷新策略**：列表对事件做 300ms 去抖，避免 100 作业 demo 的事件风暴打爆接口；详情只关心当前作业的事件
+- **验证**：`npm run typecheck` / `lint` / `build` 全过（10 条路由，/jobs 首屏 98.7 kB）
+- **未验证**：双浏览器 ≤2s 端到端（需 PG/Redis/worker 起服务，归入 D28）
+
+### D28 · 双浏览器 SSE 验收 —— ⏳ 环境阻塞
+
+- **现状**：`/nodes` 页面已于 D25 交付；验收本身需要同时运行 API + Redis + ARQ worker + Web
+- **阻塞原因**：Docker Desktop 未运行；本机 `6379` 上的 Redis 需要认证，而仓库 `.env` 中是无密码 URL，无法直接用于 SSE Pub/Sub
+- **已就绪**：后端 SSE 单测（发布/订阅、过滤、四处状态变更）、前端流式订阅与重连、100 作业 demo 脚本
+- **待办**：环境恢复后开两个浏览器打开 `/jobs`，一边提交/取消，另一边核对 ≤2s 自动刷新并记录结果
+
+### D29 · 管理-节点页（F2.2）—— 已完成
+
+- **产出**：`/admin/nodes` 页面（列表 + 注册 / 编辑 / 删除 + 在线状态切换）、`AppShell` 导航「节点管理」、`/nodes` 增加 admin 入口、`nodesApi.create/update/remove`、`NodeCreate/NodeUpdate` 类型
+- **交互**：创建与编辑复用同一表单；编辑时 `gpu_total` 不得低于 `gpu_used`；状态下拉直接 `PATCH`；删除二次确认；非 admin 显示 403 提示
+- **验收依据**：`offline` / `draining` 节点不再接收新作业，由调度器用例 `test_offline_and_draining_nodes_are_skipped` 覆盖
+- **验证**：`typecheck` / `lint` / `build` 全过（11 条路由；/admin/nodes 首屏 99.1 kB）
+- **未验证**：浏览器端到端（同 D28 环境阻塞）
+
+### D30 · 管理-配额页（F3.4）—— 已完成
+
+- **产出**：后端 `GET /quotas`（admin 全量列表，`skip/limit`）、前端 `/admin/quotas`（余量表格 + 编辑表单）、`AppShell` 导航「配额管理」、`quotasApi.list/update`、`QuotaUpdate` 类型
+- **交互**：表格展示 GPU 余量条与单作业上限；编辑时前端校验 `gpu_limit ≥ gpu_used`，服务端 409 兜底；调低上限只影响后续提交，不终止运行中的作业
+- **证据**：pytest **144 passed**（新增 admin 列表 / 非 admin 403）；`typecheck` / `lint` / `build` 全过（12 条路由；/admin/quotas 首屏 91.8 kB）
+- **未验证**：浏览器端到端（同 D28 环境阻塞）
+
 ### 下一步
 
-- D27 前端 SSE：作业列表/详情接入 `EventSource`，收到 `job.updated` 即刷新（目标 ≤2s）
+- D31 用户管理：admin 建用户 / 分配角色 / 重置密码 + `/admin/users` 页交互补齐
 

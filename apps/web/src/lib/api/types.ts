@@ -21,10 +21,13 @@ export type UserUpdate = Schemas['UserUpdate'];
 export type NodeStatus = Schemas['NodeStatus'];
 export type NodeRead = Schemas['NodeRead'];
 export type NodeList = Schemas['NodeList'];
+export type NodeCreate = Schemas['NodeCreate'];
+export type NodeUpdate = Schemas['NodeUpdate'];
 
 // F3 quotas
 export type QuotaRead = Schemas['QuotaRead'];
 export type QuotaList = Schemas['QuotaList'];
+export type QuotaUpdate = Schemas['QuotaUpdate'];
 
 // F4 jobs
 export type JobStatus = Schemas['JobStatus'];

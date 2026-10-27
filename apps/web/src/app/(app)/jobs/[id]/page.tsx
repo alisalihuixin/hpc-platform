@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { JobStatusBadge } from '@/components/JobStatusBadge';
+import { useJobEvents } from '@/hooks/useJobEvents';
 import { ApiError, jobsApi } from '@/lib/api/client';
 import type { JobDetail } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
@@ -44,7 +45,12 @@ export default function JobDetailPage() {
     void load();
   }, [load]);
 
-  // No SSE yet (D26): poll while the job can still change state.
+  // SSE gives sub-second updates; the 3s poll below stays as a fallback.
+  useJobEvents((event) => {
+    if (event.job_id === jobId) void load();
+  });
+
+  // Polling fallback in case the SSE stream is unavailable.
   const active = job?.status === 'queued' || job?.status === 'running';
   useEffect(() => {
     if (!active) return;
@@ -138,7 +144,9 @@ export default function JobDetailPage() {
       <section className="rounded-2xl border border-slate-200 bg-white p-6">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-slate-700">日志（mock）</h2>
-          {active ? <span className="text-xs text-slate-400">每 3 秒自动刷新</span> : null}
+          {active ? (
+            <span className="text-xs text-slate-400">实时刷新（SSE，3s 轮询兜底）</span>
+          ) : null}
         </div>
         <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">
           {job.log}

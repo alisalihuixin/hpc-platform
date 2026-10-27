@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { JobStatusBadge } from '@/components/JobStatusBadge';
+import { useJobEvents } from '@/hooks/useJobEvents';
 import { ApiError, jobsApi } from '@/lib/api/client';
 import type { JobRead, JobStatus } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
@@ -48,6 +49,23 @@ export default function JobsPage() {
     void load();
   }, [load]);
 
+  // SSE pushes every status change; coalesce bursts (e.g. a 100-job demo)
+  // into at most one refresh per 300ms.
+  const reloadTimer = useRef<number | null>(null);
+  useJobEvents(() => {
+    if (reloadTimer.current !== null) return;
+    reloadTimer.current = window.setTimeout(() => {
+      reloadTimer.current = null;
+      void load();
+    }, 300);
+  });
+  useEffect(
+    () => () => {
+      if (reloadTimer.current !== null) window.clearTimeout(reloadTimer.current);
+    },
+    [],
+  );
+
   async function cancel(job: JobRead) {
     if (!window.confirm(`确认取消作业 #${job.id}「${job.name}」？`)) return;
     setBusyId(job.id);
@@ -68,7 +86,7 @@ export default function JobsPage() {
         <div>
           <h1 className="text-xl font-semibold">作业</h1>
           <p className="mt-1 text-sm text-slate-500">
-            普通用户只看自己的作业，admin 可查看全部；取消仅限排队中 / 运行中。
+            普通用户只看自己的作业，admin 可查看全部；取消仅限排队中 / 运行中，状态变更实时刷新。
           </p>
         </div>
         <div className="flex items-center gap-2">
