@@ -324,7 +324,15 @@ D17 作业模型 ─────────────────────
 - **未验证**：浏览器端到端（同 D28 环境阻塞）
 - **计划偏差**：D33 计划写「引入 shadcn/ui + TanStack Query」，实际前端为 Next 14 + Tailwind + 自研 `fetch` 客户端与 `useJobEvents` hook；若后续确需组件库改造，单独立项，不在 M3 收尾窗口内塞入
 
+### D33 · 前端规则收敛（Data Table / 徽标 / 表单 / 提示）—— 已完成
+
+- **产出**：`components/ui/Alert.tsx`（error / success / info / warning 四态）、`components/ui/StatusBadge.tsx`（tone 单一来源 + 作业/节点状态映射）、`components/ui/styles.ts`（表格外壳/表头/页脚/空态/三档按钮/两档输入框）
+- **收敛范围**：`/jobs`、`/jobs/new`、`/jobs/[id]`、`/nodes`、`/usage`、`/admin/{nodes,quotas,users,groups}` 九个页面全部改用共享组件与类名常量；`JobStatusBadge` 改为 `StatusBadge` 的薄封装
+- **规则统一**：错误提示统一走 `Alert`（4 种 tone）、表格统一 `tableShell + tableHead + th + tableFooter + emptyState`、表单输入统一 `inputClass`、主/次/工具栏按钮各一档；状态徽标颜色只允许 5 种 tone，不再逐页手写颜色
+- **验证**：`grep` 复查旧硬编码（`overflow-hidden rounded-2xl`、`mt-1 w-full rounded-lg`、`rounded-full px-2 py-0.5`）在页面层已归零；`typecheck` / `lint` / `build` 全过（14 条路由，首屏 JS 与收敛前基本持平：`/jobs` 98.9→99.2 kB、`/admin/nodes` 99.2→99.6 kB）
+- **未验证**：浏览器视觉回归（同 D28 环境阻塞）——样式为等价替换，风险点集中在 `admin/nodes` 状态下拉的 tone 取值
+
 ### 下一步
 
-- D33 前端统一：Data Table / 状态徽标 / 表单校验按同一套规则收敛（不引入新依赖）；随后 D34 回归、D35 M3 验收
+- D34 M2+M3 联调回归：越权、边界、状态机、配额边界用例补齐
 

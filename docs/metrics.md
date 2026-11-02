@@ -19,9 +19,10 @@
 | 用量对账 | 明细合计 = 汇总 | **`sum(signed_gpu_hours) == total_gpu_hours`** | 含冲正场景 |
 | 策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | 首批顺序不同（见 §2.2） |
 | 前端构建 | 成功 | **typecheck + lint + build 全过，14 条路由** | Next 14.2.15 |
+| 前端样式收敛 | 无重复硬编码 | **9 个页面复用 3 个 UI 模块；旧表格/输入框/徽标类名字面量清零** | `components/ui/*` |
 | 用户管理 | 重置密码即刻生效 | **旧密码 401 / 新密码 200；改角色无需重新登录即生效** | `PATCH /users/{id}` |
 | 资源组管理 | 停用不破历史、不误停占卡组 | **7 条用例：重名 409、未知成员 404、成员覆盖幂等、`gpu_used>0` 停用 409、软删除后仍可查** | `DELETE` 仅置 `is_active=False` |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 98.8 kB；/admin/quotas 91.8 kB** | `next build` |
+| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.2 kB；/admin/nodes 99.6 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0006）** | SQLite 验证 |
 
 ## 2. 关键证据
