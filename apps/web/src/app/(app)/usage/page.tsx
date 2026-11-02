@@ -3,6 +3,17 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { Alert } from '@/components/ui/Alert';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import {
+  buttonPrimary,
+  buttonSecondary,
+  emptyState,
+  inputInlineClass,
+  tableHead,
+  tableShell,
+  th,
+} from '@/components/ui/styles';
 import { ApiError, usageApi } from '@/lib/api/client';
 import type { UsageEventRead } from '@/lib/api/types';
 import { formatDateTime, formatHours } from '@/lib/format';
@@ -65,7 +76,7 @@ export default function UsagePage() {
             type="datetime-local"
             value={draft.since}
             onChange={(event) => setDraft({ ...draft, since: event.target.value })}
-            className="mt-1 block rounded-lg border border-slate-200 px-3 py-1.5"
+            className={inputInlineClass}
           />
         </label>
         <label className="text-sm">
@@ -74,13 +85,10 @@ export default function UsagePage() {
             type="datetime-local"
             value={draft.until}
             onChange={(event) => setDraft({ ...draft, until: event.target.value })}
-            className="mt-1 block rounded-lg border border-slate-200 px-3 py-1.5"
+            className={inputInlineClass}
           />
         </label>
-        <button
-          type="submit"
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        >
+        <button type="submit" className={buttonPrimary}>
           查询
         </button>
         <button
@@ -89,15 +97,13 @@ export default function UsagePage() {
             setDraft({ since: '', until: '' });
             setRange({ since: '', until: '' });
           }}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+          className={buttonSecondary}
         >
           重置
         </button>
       </form>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -124,21 +130,19 @@ export default function UsagePage() {
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-          该时间段内还没有用量记录。
-        </div>
+        <div className={emptyState}>该时间段内还没有用量记录。</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={tableShell}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="px-4 py-3 font-medium">开始时间</th>
-                <th className="px-4 py-3 font-medium">作业</th>
-                <th className="px-4 py-3 font-medium">GPU</th>
-                <th className="px-4 py-3 font-medium">时长</th>
-                <th className="px-4 py-3 font-medium">卡时</th>
-                <th className="px-4 py-3 font-medium">单价 / 卡时</th>
-                <th className="px-4 py-3 font-medium">备注</th>
+                <th className={th}>开始时间</th>
+                <th className={th}>作业</th>
+                <th className={th}>GPU</th>
+                <th className={th}>时长</th>
+                <th className={th}>卡时</th>
+                <th className={th}>单价 / 卡时</th>
+                <th className={th}>备注</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -170,9 +174,7 @@ export default function UsagePage() {
                     <td className="px-4 py-3 text-slate-600">{rate}</td>
                     <td className="px-4 py-3">
                       {item.reversed ? (
-                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600">
-                          冲正
-                        </span>
+                        <StatusBadge tone="danger">冲正</StatusBadge>
                       ) : (
                         <span className="text-xs text-slate-400">正常</span>
                       )}

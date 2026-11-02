@@ -4,6 +4,17 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/AuthProvider';
+import { Alert } from '@/components/ui/Alert';
+import { NODE_STATUS_BADGE, badgeToneClass } from '@/components/ui/StatusBadge';
+import {
+  buttonPrimary,
+  emptyState,
+  inputClass,
+  tableFooter,
+  tableHead,
+  tableShell,
+  th,
+} from '@/components/ui/styles';
 import { ApiError, nodesApi } from '@/lib/api/client';
 import type { NodeCreate, NodeRead, NodeStatus } from '@/lib/api/types';
 
@@ -12,12 +23,6 @@ const STATUS_OPTIONS: { value: NodeStatus; label: string }[] = [
   { value: 'offline', label: '离线' },
   { value: 'draining', label: '排水' },
 ];
-
-const STATUS_STYLES: Record<NodeStatus, string> = {
-  online: 'bg-emerald-50 text-emerald-700',
-  offline: 'bg-slate-100 text-slate-500',
-  draining: 'bg-amber-50 text-amber-700',
-};
 
 interface Draft {
   hostname: string;
@@ -173,9 +178,7 @@ export default function AdminNodesPage() {
         </Link>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       <form
         onSubmit={(event) => void submit(event)}
@@ -202,7 +205,7 @@ export default function AdminNodesPage() {
             <input
               value={draft.hostname}
               onChange={(event) => setDraft({ ...draft, hostname: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
           <label className="text-sm">
@@ -212,7 +215,7 @@ export default function AdminNodesPage() {
               min={1}
               value={draft.cpu_cores}
               onChange={(event) => setDraft({ ...draft, cpu_cores: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
           <label className="text-sm">
@@ -222,7 +225,7 @@ export default function AdminNodesPage() {
               min={1}
               value={draft.mem_gb}
               onChange={(event) => setDraft({ ...draft, mem_gb: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
           <label className="text-sm">
@@ -231,7 +234,7 @@ export default function AdminNodesPage() {
               value={draft.gpu_model}
               onChange={(event) => setDraft({ ...draft, gpu_model: event.target.value })}
               placeholder="A100-80G"
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
           <label className="text-sm">
@@ -241,7 +244,7 @@ export default function AdminNodesPage() {
               min={0}
               value={draft.gpu_total}
               onChange={(event) => setDraft({ ...draft, gpu_total: event.target.value })}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
         </div>
@@ -253,7 +256,7 @@ export default function AdminNodesPage() {
         <button
           type="submit"
           disabled={busy}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          className={buttonPrimary}
         >
           {busy ? '保存中…' : editing ? '保存修改' : '注册节点'}
         </button>
@@ -262,21 +265,19 @@ export default function AdminNodesPage() {
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : nodes.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-          还没有节点，先在上方注册一台。
-        </div>
+        <div className={emptyState}>还没有节点，先在上方注册一台。</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={tableShell}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="px-4 py-3 font-medium">主机名</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">GPU</th>
-                <th className="px-4 py-3 font-medium">CPU</th>
-                <th className="px-4 py-3 font-medium">内存</th>
-                <th className="px-4 py-3 font-medium">型号</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className={th}>主机名</th>
+                <th className={th}>状态</th>
+                <th className={th}>GPU</th>
+                <th className={th}>CPU</th>
+                <th className={th}>内存</th>
+                <th className={th}>型号</th>
+                <th className={th}>操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -290,7 +291,9 @@ export default function AdminNodesPage() {
                       onChange={(event) =>
                         void changeStatus(node, event.target.value as NodeStatus)
                       }
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${STATUS_STYLES[node.status]}`}
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${badgeToneClass(
+                        NODE_STATUS_BADGE[node.status].tone,
+                      )}`}
                     >
                       {STATUS_OPTIONS.map((option) => (
                         <option key={option.value} value={option.value}>
@@ -332,7 +335,7 @@ export default function AdminNodesPage() {
               ))}
             </tbody>
           </table>
-          <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
+          <div className={tableFooter}>
             共 {nodes.length} 个节点
           </div>
         </div>

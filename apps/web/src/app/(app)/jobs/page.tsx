@@ -4,6 +4,15 @@ import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { JobStatusBadge } from '@/components/JobStatusBadge';
+import { Alert } from '@/components/ui/Alert';
+import {
+  buttonToolbar,
+  emptyState,
+  tableFooter,
+  tableHead,
+  tableShell,
+  th,
+} from '@/components/ui/styles';
 import { useJobEvents } from '@/hooks/useJobEvents';
 import { ApiError, jobsApi } from '@/lib/api/client';
 import type { JobRead, JobStatus } from '@/lib/api/types';
@@ -101,11 +110,7 @@ export default function JobsPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
+          <button type="button" onClick={() => void load()} className={buttonToolbar}>
             刷新
           </button>
           <Link
@@ -117,28 +122,24 @@ export default function JobsPage() {
         </div>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : jobs.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-          暂无作业，先去「提交作业」创建一个。
-        </div>
+        <div className={emptyState}>暂无作业，先去「提交作业」创建一个。</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={tableShell}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">名称</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">资源</th>
-                <th className="px-4 py-3 font-medium">walltime</th>
-                <th className="px-4 py-3 font-medium">排队时间</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className={th}>ID</th>
+                <th className={th}>名称</th>
+                <th className={th}>状态</th>
+                <th className={th}>资源</th>
+                <th className={th}>walltime</th>
+                <th className={th}>排队时间</th>
+                <th className={th}>操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -181,7 +182,7 @@ export default function JobsPage() {
               ))}
             </tbody>
           </table>
-          <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
+          <div className={tableFooter}>
             共 {total} 个作业{total > PAGE_SIZE ? `（当前显示最近 ${PAGE_SIZE} 个）` : ''}
           </div>
         </div>

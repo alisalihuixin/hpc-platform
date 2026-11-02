@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
+import { Alert } from '@/components/ui/Alert';
+import { buttonPrimary, inputClass } from '@/components/ui/styles';
 import { ApiError, jobsApi, quotasApi } from '@/lib/api/client';
 import type { JobCreate, QuotaRead } from '@/lib/api/types';
 
@@ -123,9 +125,9 @@ export default function NewJobPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-xl font-semibold">提交作业</h1>
-        <p className="rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <Alert tone="warning">
           你还没有加入任何资源组，无法提交作业。请联系管理员将你加入某个组并分配配额。
-        </p>
+        </Alert>
       </div>
     );
   }
@@ -144,9 +146,7 @@ export default function NewJobPage() {
         </Link>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <form
@@ -158,7 +158,7 @@ export default function NewJobPage() {
             <select
               value={groupId ?? ''}
               onChange={(event) => setGroupId(Number(event.target.value))}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             >
               {quotas.map((item) => (
                 <option key={item.group_id} value={item.group_id}>
@@ -174,7 +174,7 @@ export default function NewJobPage() {
               value={name}
               onChange={(event) => setName(event.target.value)}
               maxLength={255}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+              className={inputClass}
             />
           </label>
 
@@ -186,7 +186,7 @@ export default function NewJobPage() {
                 min={1}
                 value={numNodes}
                 onChange={(event) => setNumNodes(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="block text-sm">
@@ -196,7 +196,7 @@ export default function NewJobPage() {
                 min={0}
                 value={numGpus}
                 onChange={(event) => setNumGpus(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="block text-sm">
@@ -206,7 +206,7 @@ export default function NewJobPage() {
                 min={1}
                 value={walltime}
                 onChange={(event) => setWalltime(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
           </div>
@@ -219,7 +219,7 @@ export default function NewJobPage() {
                 min={0}
                 value={numCpus}
                 onChange={(event) => setNumCpus(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="block text-sm">
@@ -229,7 +229,7 @@ export default function NewJobPage() {
                 min={0}
                 value={memGb}
                 onChange={(event) => setMemGb(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="block text-sm">
@@ -240,7 +240,7 @@ export default function NewJobPage() {
                 max={1000}
                 value={priority}
                 onChange={(event) => setPriority(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
           </div>
@@ -252,7 +252,7 @@ export default function NewJobPage() {
               onChange={(event) => setParamsText(event.target.value)}
               rows={5}
               spellCheck={false}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
+              className={`${inputClass} font-mono text-xs`}
             />
           </label>
 
@@ -267,7 +267,7 @@ export default function NewJobPage() {
           <button
             type="submit"
             disabled={submitting || validation.length > 0}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            className={buttonPrimary}
           >
             {submitting ? '提交中…' : '提交作业'}
           </button>

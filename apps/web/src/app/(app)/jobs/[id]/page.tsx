@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { JobStatusBadge } from '@/components/JobStatusBadge';
 import { useJobEvents } from '@/hooks/useJobEvents';
+import { Alert } from '@/components/ui/Alert';
 import { ApiError, jobsApi } from '@/lib/api/client';
 import type { JobDetail } from '@/lib/api/types';
 import { formatDateTime } from '@/lib/format';
@@ -78,9 +79,7 @@ export default function JobDetailPage() {
   if (!job) {
     return (
       <div className="space-y-4">
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error ?? '作业不存在'}
-        </p>
+        <Alert>{error ?? '作业不存在'}</Alert>
         <Link href="/jobs" className="text-sm text-brand-600 hover:underline">
           返回作业列表
         </Link>
@@ -117,9 +116,7 @@ export default function JobDetailPage() {
         </div>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <MetaItem label="节点数" value={`${job.num_nodes} 节点`} />

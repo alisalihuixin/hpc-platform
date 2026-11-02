@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/AuthProvider';
+import { Alert } from '@/components/ui/Alert';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import {
+  buttonPrimary,
+  buttonSecondary,
+  buttonToolbar,
+  inputClass,
+  tableFooter,
+  tableHead,
+  tableShell,
+  th,
+} from '@/components/ui/styles';
 import { ApiError, usersApi } from '@/lib/api/client';
 import type { UserRead } from '@/lib/api/types';
 
@@ -185,11 +197,7 @@ export default function AdminUsersPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
-          >
+          <button type="button" onClick={() => void load()} className={buttonToolbar}>
             刷新
           </button>
           <button
@@ -205,12 +213,8 @@ export default function AdminUsersPage() {
         </div>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
-      {notice ? (
-        <p className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       {createOpen ? (
         <form
@@ -230,7 +234,7 @@ export default function AdminUsersPage() {
                   setCreateDraft({ ...createDraft, email: event.target.value })
                 }
                 placeholder="alice@hpc.local"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -244,7 +248,7 @@ export default function AdminUsersPage() {
                   setCreateDraft({ ...createDraft, username: event.target.value })
                 }
                 placeholder="alice"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -255,7 +259,7 @@ export default function AdminUsersPage() {
                 onChange={(event) =>
                   setCreateDraft({ ...createDraft, full_name: event.target.value })
                 }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -268,7 +272,7 @@ export default function AdminUsersPage() {
                 onChange={(event) =>
                   setCreateDraft({ ...createDraft, password: event.target.value })
                 }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
           </div>
@@ -302,14 +306,14 @@ export default function AdminUsersPage() {
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className={buttonPrimary}
             >
               {busy ? '创建中…' : '创建用户'}
             </button>
             <button
               type="button"
               onClick={closePanels}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              className={buttonSecondary}
             >
               取消
             </button>
@@ -344,7 +348,7 @@ export default function AdminUsersPage() {
                 onChange={(event) =>
                   setEditDraft({ ...editDraft, full_name: event.target.value })
                 }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -357,7 +361,7 @@ export default function AdminUsersPage() {
                   setEditDraft({ ...editDraft, password: event.target.value })
                 }
                 placeholder="至少 8 位"
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
           </div>
@@ -404,14 +408,14 @@ export default function AdminUsersPage() {
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+              className={buttonPrimary}
             >
               {busy ? '保存中…' : '保存修改'}
             </button>
             <button
               type="button"
               onClick={closePanels}
-              className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+              className={buttonSecondary}
             >
               取消
             </button>
@@ -422,16 +426,16 @@ export default function AdminUsersPage() {
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={tableShell}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">用户名</th>
-                <th className="px-4 py-3 font-medium">邮箱</th>
-                <th className="px-4 py-3 font-medium">角色</th>
-                <th className="px-4 py-3 font-medium">状态</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className={th}>ID</th>
+                <th className={th}>用户名</th>
+                <th className={th}>邮箱</th>
+                <th className={th}>角色</th>
+                <th className={th}>状态</th>
+                <th className={th}>操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -458,15 +462,9 @@ export default function AdminUsersPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={
-                        user.is_active
-                          ? 'rounded-full bg-emerald-50 px-2 py-0.5 text-xs text-emerald-600'
-                          : 'rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-600'
-                      }
-                    >
+                    <StatusBadge tone={user.is_active ? 'success' : 'danger'}>
                       {user.is_active ? '启用' : '禁用'}
-                    </span>
+                    </StatusBadge>
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -484,9 +482,7 @@ export default function AdminUsersPage() {
               ))}
             </tbody>
           </table>
-          <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
-            共 {total} 个用户
-          </div>
+          <div className={tableFooter}>共 {total} 个用户</div>
         </div>
       )}
 

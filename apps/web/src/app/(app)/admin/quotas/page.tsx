@@ -3,6 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { useAuth } from '@/components/AuthProvider';
+import { Alert } from '@/components/ui/Alert';
+import {
+  buttonPrimary,
+  emptyState,
+  inputClass,
+  tableFooter,
+  tableHead,
+  tableShell,
+  th,
+} from '@/components/ui/styles';
 import { ApiError, quotasApi } from '@/lib/api/client';
 import type { QuotaRead } from '@/lib/api/types';
 
@@ -112,9 +122,7 @@ export default function AdminQuotasPage() {
         </p>
       </header>
 
-      {error ? (
-        <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-      ) : null}
+      {error ? <Alert>{error}</Alert> : null}
 
       {editing ? (
         <form
@@ -142,7 +150,7 @@ export default function AdminQuotasPage() {
                 min={editing.gpu_used}
                 value={draft.gpu_limit}
                 onChange={(event) => setDraft({ ...draft, gpu_limit: event.target.value })}
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -154,7 +162,7 @@ export default function AdminQuotasPage() {
                 onChange={(event) =>
                   setDraft({ ...draft, max_nodes_per_job: event.target.value })
                 }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
             <label className="text-sm">
@@ -166,7 +174,7 @@ export default function AdminQuotasPage() {
                 onChange={(event) =>
                   setDraft({ ...draft, max_gpus_per_job: event.target.value })
                 }
-                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2"
+                className={inputClass}
               />
             </label>
           </div>
@@ -175,11 +183,7 @@ export default function AdminQuotasPage() {
             <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600">{formError}</p>
           ) : null}
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
+          <button type="submit" disabled={busy} className={buttonPrimary}>
             {busy ? '保存中…' : '保存修改'}
           </button>
         </form>
@@ -188,19 +192,17 @@ export default function AdminQuotasPage() {
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : quotas.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">
-          还没有资源组配额。
-        </div>
+        <div className={emptyState}>还没有资源组配额。</div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={tableShell}>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead className={tableHead}>
               <tr>
-                <th className="px-4 py-3 font-medium">资源组</th>
-                <th className="px-4 py-3 font-medium">GPU 余量</th>
-                <th className="px-4 py-3 font-medium">单作业节点上限</th>
-                <th className="px-4 py-3 font-medium">单作业 GPU 上限</th>
-                <th className="px-4 py-3 font-medium">操作</th>
+                <th className={th}>资源组</th>
+                <th className={th}>GPU 余量</th>
+                <th className={th}>单作业节点上限</th>
+                <th className={th}>单作业 GPU 上限</th>
+                <th className={th}>操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -246,9 +248,7 @@ export default function AdminQuotasPage() {
               })}
             </tbody>
           </table>
-          <div className="border-t border-slate-100 px-4 py-3 text-xs text-slate-400">
-            共 {quotas.length} 个资源组
-          </div>
+          <div className={tableFooter}>共 {quotas.length} 个资源组</div>
         </div>
       )}
 
