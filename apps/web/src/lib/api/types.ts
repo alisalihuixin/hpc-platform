@@ -29,6 +29,14 @@ export type QuotaRead = Schemas['QuotaRead'];
 export type QuotaList = Schemas['QuotaList'];
 export type QuotaUpdate = Schemas['QuotaUpdate'];
 
+// F8.2 groups
+export type GroupMemberRead = Schemas['GroupMemberRead'];
+export type GroupCreate = Schemas['GroupCreate'];
+export type GroupUpdate = Schemas['GroupUpdate'];
+export type GroupMembersUpdate = Schemas['GroupMembersUpdate'];
+export type GroupRead = Schemas['GroupRead'];
+export type GroupList = Schemas['GroupList'];
+
 // F4 jobs
 export type JobStatus = Schemas['JobStatus'];
 export type JobCreate = Schemas['JobCreate'];

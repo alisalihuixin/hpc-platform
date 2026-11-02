@@ -9,6 +9,10 @@
  */
 import type { paths } from './schema';
 import type {
+  GroupCreate,
+  GroupList,
+  GroupRead,
+  GroupUpdate,
   GroupUsageRanking,
   JobCreate,
   JobDetail,
@@ -51,6 +55,7 @@ export const endpoints = {
   logout: '/api/v1/auth/logout',
   me: '/api/v1/auth/me',
   users: '/api/v1/users',
+  groups: '/api/v1/groups',
   nodes: '/api/v1/nodes',
   jobs: '/api/v1/jobs',
   jobsStream: '/api/v1/jobs/stream',
@@ -221,6 +226,39 @@ export const usersApi = {
     return request<UserRead>(`${endpoints.users}/${userId}`, {
       method: 'PATCH',
       body: JSON.stringify(payload),
+    });
+  },
+};
+
+// ---- F8.2 groups ---------------------------------------------------------
+export const groupsApi = {
+  async list(skip = 0, limit = 200): Promise<GroupList> {
+    return request<GroupList>(`${endpoints.groups}${query({ skip, limit })}`);
+  },
+
+  async create(payload: GroupCreate): Promise<GroupRead> {
+    return request<GroupRead>(endpoints.groups, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async update(groupId: number, payload: GroupUpdate): Promise<GroupRead> {
+    return request<GroupRead>(`${endpoints.groups}/${groupId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async remove(groupId: number): Promise<void> {
+    return request<void>(`${endpoints.groups}/${groupId}`, { method: 'DELETE' });
+  },
+
+  /** Replace the whole membership set (idempotent). */
+  async setMembers(groupId: number, userIds: number[]): Promise<GroupRead> {
+    return request<GroupRead>(`${endpoints.groups}/${groupId}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ user_ids: userIds }),
     });
   },
 };

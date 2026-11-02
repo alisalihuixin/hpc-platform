@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/usage', label: '我的用量', adminOnly: false },
   { href: '/admin/nodes', label: '节点管理', adminOnly: true },
   { href: '/admin/quotas', label: '配额管理', adminOnly: true },
+  { href: '/admin/groups', label: '资源组', adminOnly: true },
   { href: '/admin/users', label: '用户管理', adminOnly: true },
 ];
 

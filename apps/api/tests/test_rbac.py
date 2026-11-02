@@ -104,9 +104,7 @@ async def test_deactivated_user_is_rejected(client: AsyncClient, seeded) -> None
     assert relogin.status_code == 403
 
 
-async def test_admin_resets_password_and_old_one_is_rejected(
-    client: AsyncClient, seeded
-) -> None:
+async def test_admin_resets_password_and_old_one_is_rejected(client: AsyncClient, seeded) -> None:
     admin_headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
     listing = await client.get(f"{API}/users", headers=admin_headers)
     user_id = next(u["id"] for u in listing.json()["items"] if u["email"] == USER_EMAIL)
