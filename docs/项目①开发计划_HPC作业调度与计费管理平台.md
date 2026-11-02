@@ -314,7 +314,17 @@ D17 作业模型 ─────────────────────
 - **证据**：pytest **146 passed**（新增「重置密码后旧密码 401、新密码 200」「改角色后旧 token 直接获得 admin 权限」）；`ruff` 全过；`typecheck` / `lint` / `build` 全过（13 条路由；`/admin/users` 首屏 92.5 kB）
 - **未验证**：浏览器端到端（同 D28 环境阻塞）
 
+### D32 · 管理-资源组页（F8.2）—— 已完成
+
+- **产出**：`/api/v1/groups` 全套（列表 / 创建 / 详情 / 改名与启停 / 停用 / 成员整体覆盖）、`/admin/groups` 页面、`AppShell` 导航「资源组」、`groupsApi`
+- **数据**：创建组时同事务建 1:1 配额行（`gpu_limit` / 单作业上限由表单给出）；成员用 `PUT /groups/{id}/members` 全量覆盖，天然幂等
+- **删除语义**：停用是软删除（`is_active=False`），作业与流水历史不断链；`quota.gpu_used > 0` 时返回 409，避免把仍在占卡的组停掉
+- **证据**：pytest **153 passed**（新增 7 条：非 admin 403、建组带配额、重名 409、未知成员 404、成员覆盖幂等、改名冲突、停用拦截/软删）；`ruff check` + `ruff format` 全过；`typecheck` / `lint` / `build` 全过（14 条路由；`/admin/groups` 首屏 92.9 kB）
+- **工具链**：`scripts/gen-api.mjs` 支持本地 `openapi.json`（`OPENAPI_URL=../api/openapi.json npm run gen:api`），不再强制先起服务
+- **未验证**：浏览器端到端（同 D28 环境阻塞）
+- **计划偏差**：D33 计划写「引入 shadcn/ui + TanStack Query」，实际前端为 Next 14 + Tailwind + 自研 `fetch` 客户端与 `useJobEvents` hook；若后续确需组件库改造，单独立项，不在 M3 收尾窗口内塞入
+
 ### 下一步
 
-- D32 用户组管理：组增删改 / 成员维护 + `/admin/groups` 页
+- D33 前端统一：Data Table / 状态徽标 / 表单校验按同一套规则收敛（不引入新依赖）；随后 D34 回归、D35 M3 验收
 
