@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +45,8 @@ async def create_user(db: AsyncSession, payload: UserCreate) -> User:
         email=payload.email,
         username=payload.username,
         full_name=payload.full_name,
-        hashed_password=hash_password(payload.password),
+        # bcrypt is CPU-bound; keep the event loop free (see bench_login.py).
+        hashed_password=await asyncio.to_thread(hash_password, payload.password),
         roles=await _resolve_roles(db, payload.roles),
     )
     db.add(user)
@@ -62,7 +65,7 @@ async def update_user(db: AsyncSession, user_id: int, payload: UserUpdate) -> Us
     if payload.is_active is not None:
         user.is_active = payload.is_active
     if payload.password:
-        user.hashed_password = hash_password(payload.password)
+        user.hashed_password = await asyncio.to_thread(hash_password, payload.password)
     if payload.roles is not None:
         user.roles = await _resolve_roles(db, payload.roles)
 

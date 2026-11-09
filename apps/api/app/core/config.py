@@ -41,7 +41,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     # bcrypt work factor; lowered in tests to keep the suite fast.
-    bcrypt_rounds: int = 12
+    # 10 is the OWASP floor and keeps a single login ~95ms (p95 < 200ms); every
+    # +1 doubles that. Raise to 12 if the threat model outweighs the latency -
+    # see scripts/bench_login.py for the measured numbers.
+    bcrypt_rounds: int = 10
 
     # ---- Login rate limit (sliding window) ----
     login_rate_limit_max_attempts: int = 5

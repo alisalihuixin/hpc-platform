@@ -14,6 +14,7 @@ Token lifecycle
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import lru_cache
@@ -73,10 +74,12 @@ async def authenticate(db: AsyncSession, identifier: str, password: str) -> User
 
     if user is None:
         # Hash anyway so a missing user isn't distinguishable by response time.
-        verify_password(password, _dummy_hash())
+        # bcrypt is CPU-bound: run it off the event loop or one login stalls
+        # every concurrent request (measured in scripts/bench_login.py).
+        await asyncio.to_thread(verify_password, password, _dummy_hash())
         raise AuthenticationError("Invalid credentials")
 
-    if not verify_password(password, user.hashed_password):
+    if not await asyncio.to_thread(verify_password, password, user.hashed_password):
         raise AuthenticationError("Invalid credentials")
 
     if not user.is_active:
