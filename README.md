@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35；仅 D28 双浏览器实测待环境）** ｜ **M4 进行中**（D36 月结物化视图完成）｜ 下一步 D37 报表页
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35；仅 D28 双浏览器实测待环境）** ｜ **M4 进行中**（D36 月结物化视图、D37 报表页完成）｜ 下一步 D38 审计
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -116,11 +116,11 @@ hpc-platform/
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
 | SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D28 浏览器实测 |
 | 前端 SSE 刷新 | 收到事件即刷新 | **fetch 流式 + 401 刷新重连；列表 300ms 去抖** | 代码已接入，端到端待 D28 |
-| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，14 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
-| 前端样式收敛 | 无重复硬编码 | **9 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
+| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，15 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
+| 前端样式收敛 | 无重复硬编码 | **10 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全返还 | **GPU/CPU/内存归零、不产生流水、重复取消 409** | D34 |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.2 kB；/admin/nodes 99.6 kB** | `next build` 输出 |
+| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.3 kB；/reports 92.5 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0007，SQLite）** | 0007 在非 PG 方言为 no-op |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
@@ -317,12 +317,14 @@ hpc-platform/
 - [x] F6.1 月结物化视图 `mv_monthly_billing`（月 × 用户 × 组：净卡时 + 去重作业数），唯一索引支撑 `REFRESH CONCURRENTLY`
 - [x] `GET /reports/monthly`（admin 全量，成员仅自己）+ `POST /reports/monthly/refresh`（admin）
 - [x] ARQ 定时任务：每小时 `:05` 刷新物化视图（`cron_jobs`）
+- [x] D37 报表页 `/reports`：月结表格 + 起止月筛选 + admin 组筛选/手动刷新；普通成员仅见自身 bucket
 
 **关键实现**
 
 - [`report_service.py`](apps/api/app/services/report_service.py)：PG 走物化视图，SQLite 无物化视图时退化为实时聚合，两条路径输出同一 `MonthlyRow`；冲正行取负、`job_count` 用 `COUNT(DISTINCT job_id)`。
 - [`0007_monthly_billing.py`](apps/api/alembic/versions/0007_monthly_billing.py)：非 PG 方言为 no-op，迁移链 `0001–0007` 在 SQLite 上 upgrade/downgrade 双向通过。
 - `REFRESH ... CONCURRENTLY` 不能在事务块内执行，刷新走引擎的 AUTOCOMMIT 连接。
+- [`reports/page.tsx`](apps/web/src/app/(app)/reports/page.tsx)：月份用原生 `type="month"` 换算月首/月末；刷新失败或 no-op 时原样展示后端说明，不静默成功。
 - 未在本机验证：PG 物化视图路径（Docker 未运行），SQLite 兜底路径有 5 条用例覆盖。
 
 ---

@@ -388,7 +388,16 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **证据**：pytest **163 passed**（+5：admin 全量/成员自见/越权 403/组过滤/刷新 no-op）；`ruff check` + `format` 全过；迁移链 `0001–0007` upgrade→downgrade→upgrade 三连通过
 - **未验证**：PG 物化视图与 `CONCURRENTLY` 的实际执行（Docker 未运行），需起 PG 后补一次刷新实测
 
+### D37 · 月结报表页（F6.2 前端）—— 已完成
+
+- **产出**：`/reports` 页面（月结表格 + 起始月/结束月筛选 + admin 资源组筛选 + 总净卡时/条目数汇总 + admin「刷新物化视图」按钮）、`AppShell` 导航「月结报表」、`reportsApi.monthly/refresh`
+- **口径**：与 `usage/me` 一致（冲正折负）；普通成员只看到自己的 bucket，admin 可看全部并按组过滤
+- **交互**：月份用原生 `type="month"`，前端换算成月首/月末时间戳再调接口；刷新按钮把后端 `refreshed=false` 的说明原样展示（SQLite 环境提示「实时聚合」），不做静默成功
+- **偏差**：计划 D37 还包含 `/reports/dashboard`，本轮未做——它没有前端消费方，挪到 D39 与 ECharts 看板一起交付，避免先造无用接口
+- **证据**：`typecheck` / `lint` / `build` 全过（**15 条路由**；`/reports` 首屏 92.5 kB）；后端接口由 D36 的 5 条用例覆盖
+- **未验证**：浏览器视觉与交互（同 D28 环境阻塞）
+
 ### 下一步
 
-- D37 报表页：`/reports` 月结表格 + 月份/资源组筛选，admin 可手动刷新（F6.2 导出留到 D38）
+- D38 F7.1–F7.3 审计：触发器写 `audit_log` + 操作人注入 + `/audit-logs` 查询接口
 
