@@ -126,7 +126,7 @@ hpc-platform/
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
 | 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms、作业列表 5.58ms** | SQLite，10 轮，`scripts/bench_queries.py` |
-| 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
+| 登录接口延迟 | p95 < 200ms | **串行 p95 108.3ms；并发 10 p95 319.0ms、吞吐 39 logins/s** | bcrypt 10 轮，`scripts/bench_login.py` |
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
 | 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |

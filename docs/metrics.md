@@ -30,6 +30,7 @@
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 数据与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
 | 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms** | SQLite，10 轮，见 §2.4 |
+| 登录接口延迟 | p95 < 200ms | **串行 p95 108.3ms / 并发 10 p95 319.0ms；吞吐 39 logins/s** | bcrypt 10 轮，见 §2.5 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
@@ -82,12 +83,24 @@
 - `EXPLAIN QUERY PLAN` 确认作业列表走 `ix_jobs_user_created_at`
 - 改写：看板原先聚合两次（趋势窗口 + 本月），合并为一次后按月份分流
 
+### 2.5 登录延迟（bcrypt + 事件循环）
+
+命令：`cd apps/api && python scripts/bench_login.py [--rounds 10|12]`
+
+| 配置 | 串行 p50 / p95 | 并发 10 p50 / p95 | 吞吐 |
+|---|---|---|---|
+| bcrypt 12 轮 | 321.9 / 350.5 ms | 581.0 / 709.8 ms | 16.6 logins/s |
+| **bcrypt 10 轮（现默认）** | **95.8 / 108.3 ms** | **232.0 / 319.0 ms** | **39.0 logins/s** |
+
+- 并发/串行 p50 比值 1.8–2.4（若 bcrypt 跑在事件循环上应接近 10）——说明 `asyncio.to_thread` 生效
+- 默认 rounds 由 12 调为 10（OWASP 下限），单次登录 p95 从 350ms 降到 108ms，吞吐翻倍
+- 代价：哈希强度降低 4 倍；如需更强防护可把 `BCRYPT_ROUNDS` 调回 12，延迟同比翻倍
+
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
 |---|---|---|
 | 双浏览器 SSE ≤2s 同步 | 待测 | Docker 未运行；本机 Redis 需认证，无法起完整栈 |
-| 登录接口 P95 延迟 | 待测 | 尚未接入压测 |
 | 测试覆盖率 | 待测 | 尚未接入 pytest-cov |
 | 前端浏览器 E2E | 待测 | 同上，需 PG/Redis/worker/web 全栈 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |

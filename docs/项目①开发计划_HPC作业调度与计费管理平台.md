@@ -441,5 +441,12 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 ### 项目①状态
 
 - M1–M3 完成，M4 除「PG 实测 / 浏览器 E2E」外完成
-- 剩余待办：D28 双浏览器 SSE 实测、PG 物化视图与触发器实测、登录 P95 压测、真实域名部署
+- 剩余待办：D28 双浏览器 SSE 实测、PG 物化视图与触发器实测、真实域名部署
+
+### 追加 · 登录延迟闭环（D40 后）
+
+- **发现**：`authenticate` 里 `verify_password` 是同步 CPU 密集调用，会阻塞事件循环——并发登录会被串行化
+- **修复**：登录校验与建/改用户的 `hash_password` 统一走 `asyncio.to_thread`；新增 `scripts/bench_login.py`（串行 + 并发双口径，报告并发/串行 p50 比值）
+- **调参**：默认 `BCRYPT_ROUNDS` 12 → 10（OWASP 下限）。实测串行 p95 350.5 → 108.3ms、吞吐 16.6 → 39.0 logins/s；并发/串行 p50 比值 1.8–2.4（阻塞时会接近 10）
+- **证据**：pytest **168 passed**；`ruff` 全过；数据写入 `docs/metrics.md` §2.5
 
