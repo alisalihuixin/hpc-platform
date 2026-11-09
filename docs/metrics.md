@@ -8,7 +8,7 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **163 passed**（≈24.5s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **167 passed**（≈19.6s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -27,8 +27,9 @@
 | 边界校验 | 越界一律 422 | **提交 8 类越界 + 查询 7 类非法参数逐项断言** | 回归用例 3/4 |
 | M3 验收 | 验收清单闭环 | **9 项中 8 项通过；D28 双浏览器 ≤2s 实测待环境** | 开发计划 D35 验收表 |
 | 月结报表 | 聚合口径与流水一致 | **2 月/1 月共 2 个 bucket，冲正折负后合计 `6.5000` 卡时；`job_count` 去重** | `tests/test_reports.py` |
+| 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.3 kB；/reports 92.5 kB** | `next build` |
-| 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0007）** | SQLite 验证；0007 非 PG 为 no-op |
+| 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
 ## 2. 关键证据
 

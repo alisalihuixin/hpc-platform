@@ -397,7 +397,17 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **证据**：`typecheck` / `lint` / `build` 全过（**15 条路由**；`/reports` 首屏 92.5 kB）；后端接口由 D36 的 5 条用例覆盖
 - **未验证**：浏览器视觉与交互（同 D28 环境阻塞）
 
+### D38 · 审计（F7.1–F7.3）—— 已完成
+
+- **F7.1 触发器**：迁移 `0008_audit_log` 建 `audit_log` 表并为 `users` / `quotas` / `nodes` / `jobs` 安装 UPDATE / DELETE 触发器；`jobs` 只在 `status` 真正变化时留痕（否则调度轮询会写爆）。`hashed_password` 一律剔除。
+- **F7.2 操作人注入**：PG 触发器读 `current_setting('app.user_id', true)`；应用侧在 `get_current_user` 里用 `set_config(..., true)`（事务级）写入，worker/后台写为 `system`。SQLite 无会话变量，`changed_by` 为 NULL，仅验证触发器本身。
+- **F7.3 查询接口**：`GET /audit-logs`（admin），支持 `table_name` / `record_id` / `action` / `changed_by` / 时间窗 / 分页，按 `changed_at desc, id desc` 排序。
+- **DDL 单一来源**：`app/db/audit_triggers.py` 同时供迁移与 pytest 引导使用，避免「迁移建了、测试没建」的双份漂移。
+- **偏差**：计划写「操作人注入中间件」，实际放在 `get_current_user` 依赖里——中间件拿不到依赖注入的 session，而依赖在请求内每请求执行一次，语义等价且更可靠。
+- **证据**：pytest **167 passed**（+4：节点更新/删除留痕、密码不入审计、作业仅状态变化留痕、接口权限与参数校验）；`ruff check` + `format` 全过；迁移链 `0001–0008` upgrade→downgrade→upgrade 三连通过
+- **未验证**：PG 触发器 + `app.user_id` 的真实链路（Docker 未运行），需起 PG 后补一条「admin 改配额 → 审计里 `changed_by=1`」实测
+
 ### 下一步
 
-- D38 F7.1–F7.3 审计：触发器写 `audit_log` + 操作人注入 + `/audit-logs` 查询接口
+- D39 看板与审计页：`/admin/reports`（ECharts 卡时趋势/队列占用/TOP）+ `/admin/audit` 审计筛选页；`/reports/dashboard` 接口同步补齐
 
