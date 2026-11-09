@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35；仅 D28 双浏览器实测待环境）** ｜ 下一步 **M4 D36 月结报表**
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35；仅 D28 双浏览器实测待环境）** ｜ **M4 进行中**（D36 月结物化视图完成）｜ 下一步 D37 报表页
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -103,7 +103,7 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **158 passed**（≈23.2s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **163 passed**（≈24.5s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
@@ -121,7 +121,8 @@ hpc-platform/
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全返还 | **GPU/CPU/内存归零、不产生流水、重复取消 409** | D34 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.2 kB；/admin/nodes 99.6 kB** | `next build` 输出 |
-| 迁移可用性 | upgrade/downgrade 双向 | **已验证** | SQLite 上建表 + roles 种子 + 回滚 |
+| 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0007，SQLite）** | 0007 在非 PG 方言为 no-op |
+| 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
@@ -306,6 +307,23 @@ hpc-platform/
 **遗留**
 
 - 真实 Redis + 浏览器 SSE 联动待 D28 起服务实测（双浏览器 ≤2s 同步）。
+
+### M4 报表 + 审计 + 上线 —— ⏳ 进行中（D36 完成）
+
+> D36：月结物化视图与报表接口已落地；D37–D40 为报表页、审计、上线。
+
+**已完成**
+
+- [x] F6.1 月结物化视图 `mv_monthly_billing`（月 × 用户 × 组：净卡时 + 去重作业数），唯一索引支撑 `REFRESH CONCURRENTLY`
+- [x] `GET /reports/monthly`（admin 全量，成员仅自己）+ `POST /reports/monthly/refresh`（admin）
+- [x] ARQ 定时任务：每小时 `:05` 刷新物化视图（`cron_jobs`）
+
+**关键实现**
+
+- [`report_service.py`](apps/api/app/services/report_service.py)：PG 走物化视图，SQLite 无物化视图时退化为实时聚合，两条路径输出同一 `MonthlyRow`；冲正行取负、`job_count` 用 `COUNT(DISTINCT job_id)`。
+- [`0007_monthly_billing.py`](apps/api/alembic/versions/0007_monthly_billing.py)：非 PG 方言为 no-op，迁移链 `0001–0007` 在 SQLite 上 upgrade/downgrade 双向通过。
+- `REFRESH ... CONCURRENTLY` 不能在事务块内执行，刷新走引擎的 AUTOCOMMIT 连接。
+- 未在本机验证：PG 物化视图路径（Docker 未运行），SQLite 兜底路径有 5 条用例覆盖。
 
 ---
 

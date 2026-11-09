@@ -379,7 +379,16 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - 登录 P95、限流并发压测未做（需 load 工具）
 - D28 双浏览器实测
 
+### D36 · 月结物化视图（F6.1）—— 已完成
+
+- **产出**：迁移 `0007_monthly_billing`（PG 建 `mv_monthly_billing`：月 × 用户 × 组，净卡时 + `COUNT(DISTINCT job_id)`，并建 `(month, user_id, group_id)` 唯一索引供 `REFRESH CONCURRENTLY`）、`report_service.py`、`GET /reports/monthly`、`POST /reports/monthly/refresh`、ARQ 每小时 `:05` 刷新任务
+- **双路径**：PG 读物化视图；SQLite 无物化视图，服务层实时聚合 `usage_events`，两条路径输出同一个 `MonthlyRow`，测试可在无 PG 环境下覆盖口径
+- **权限**：admin 可看全量并按 `user_id`/`group_id` 过滤；普通成员强制 `user_id=自己`，显式查他人 403
+- **刷新**：`REFRESH ... CONCURRENTLY` 不能在事务块内执行，走引擎的 AUTOCOMMIT 连接；非 PG 返回 `refreshed=false`（不改报错）
+- **证据**：pytest **163 passed**（+5：admin 全量/成员自见/越权 403/组过滤/刷新 no-op）；`ruff check` + `format` 全过；迁移链 `0001–0007` upgrade→downgrade→upgrade 三连通过
+- **未验证**：PG 物化视图与 `CONCURRENTLY` 的实际执行（Docker 未运行），需起 PG 后补一次刷新实测
+
 ### 下一步
 
-- D36 F6.1 月结物化视图 `mv_monthly_billing` + 定时刷新（进入 M4 报表）
+- D37 报表页：`/reports` 月结表格 + 月份/资源组筛选，admin 可手动刷新（F6.2 导出留到 D38）
 
