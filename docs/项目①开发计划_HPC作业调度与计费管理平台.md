@@ -407,7 +407,17 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **证据**：pytest **167 passed**（+4：节点更新/删除留痕、密码不入审计、作业仅状态变化留痕、接口权限与参数校验）；`ruff check` + `format` 全过；迁移链 `0001–0008` upgrade→downgrade→upgrade 三连通过
 - **未验证**：PG 触发器 + `app.user_id` 的真实链路（Docker 未运行），需起 PG 后补一条「admin 改配额 → 审计里 `changed_by=1`」实测
 
+### D39 · 看板与审计页 —— 已完成
+
+- **后端**：`GET /reports/dashboard`（admin）返回四类数据——作业/节点 totals、近 6 个月净卡时趋势（缺月补 0）、本月 TOP5 用户与资源组；趋势与 TOP 复用 `monthly_billing`，与报表同口径（冲正折负）
+- **前端看板**：升级 `/dashboard`——admin 可见「平台看板」区块（运行中/排队作业、在线节点、GPU 占用、纯 CSS 柱状趋势图、TOP 用户/组），普通用户仍看个人信息
+- **前端审计页**：`/admin/audit`——表名/动作/操作人/时间窗筛选 + 分页 + 变更摘要（最多展示 3 个字段的 before→after），导航新增「审计日志」
+- **偏差 1**：计划写 ECharts，实际用 Tailwind 自绘柱状图。理由：项目全程零 UI 依赖、首屏 shared 87.2 kB，ECharts 会引入约 330 kB gzip；看板只需「趋势 + TOP」，自绘已够。若后续要交互式图表（缩放/联动/热力图）再单独立项评估。
+- **偏差 2**：看板放在 `/dashboard` 而非新建 `/admin/reports`，避免与 `/reports`（月结）概念分裂。
+- **证据**：pytest **168 passed**（+1：看板 totals/趋势补零/TOP 排序/非 admin 403）；`ruff check` + `format` 全过；`typecheck` / `lint` / `build` 全过（**16 条路由**；`/dashboard` 92.2 kB、`/admin/audit` 92.8 kB）
+- **未验证**：浏览器图表渲染与筛选交互（同 D28 环境阻塞）
+
 ### 下一步
 
-- D39 看板与审计页：`/admin/reports`（ECharts 卡时趋势/队列占用/TOP）+ `/admin/audit` 审计筛选页；`/reports/dashboard` 接口同步补齐
+- D40 收口：慢查询优化（复合索引/改写）+ 种子数据压测 p95 + README/metrics 终稿 + 上线清单
 

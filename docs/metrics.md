@@ -8,7 +8,7 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **167 passed**（≈19.6s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **168 passed**（≈20.9s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -18,8 +18,8 @@
 | 冲正对账 | 冲正后净卡时为 0 | **原行保留 + 补偿行，`net_gpu_hours=0`** | 只增不改 |
 | 用量对账 | 明细合计 = 汇总 | **`sum(signed_gpu_hours) == total_gpu_hours`** | 含冲正场景 |
 | 策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | 首批顺序不同（见 §2.2） |
-| 前端构建 | 成功 | **typecheck + lint + build 全过，15 条路由** | Next 14.2.15 |
-| 前端样式收敛 | 无重复硬编码 | **10 个页面复用 3 个 UI 模块；旧表格/输入框/徽标类名字面量清零** | `components/ui/*` |
+| 前端构建 | 成功 | **typecheck + lint + build 全过，16 条路由** | Next 14.2.15 |
+| 前端样式收敛 | 无重复硬编码 | **11 个页面复用 3 个 UI 模块；旧表格/输入框/徽标类名字面量清零** | `components/ui/*` |
 | 用户管理 | 重置密码即刻生效 | **旧密码 401 / 新密码 200；改角色无需重新登录即生效** | `PATCH /users/{id}` |
 | 资源组管理 | 停用不破历史、不误停占卡组 | **7 条用例：重名 409、未知成员 404、成员覆盖幂等、`gpu_used>0` 停用 409、软删除后仍可查** | `DELETE` 仅置 `is_active=False` |
 | 全链路回归 | 提交→调度→结束→计费一致 | **详情 `gpu_minutes=120` 与流水 `duration_min=60` 同源；配额与节点三计数器归零** | `tests/test_regression.py` |
@@ -28,7 +28,8 @@
 | M3 验收 | 验收清单闭环 | **9 项中 8 项通过；D28 双浏览器 ≤2s 实测待环境** | 开发计划 D35 验收表 |
 | 月结报表 | 聚合口径与流水一致 | **2 月/1 月共 2 个 bucket，冲正折负后合计 `6.5000` 卡时；`job_count` 去重** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.3 kB；/reports 92.5 kB** | `next build` |
+| 平台看板 | 数据与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
+| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
 ## 2. 关键证据
