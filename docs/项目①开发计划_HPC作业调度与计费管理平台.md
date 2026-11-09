@@ -332,7 +332,18 @@ D17 作业模型 ─────────────────────
 - **验证**：`grep` 复查旧硬编码（`overflow-hidden rounded-2xl`、`mt-1 w-full rounded-lg`、`rounded-full px-2 py-0.5`）在页面层已归零；`typecheck` / `lint` / `build` 全过（14 条路由，首屏 JS 与收敛前基本持平：`/jobs` 98.9→99.2 kB、`/admin/nodes` 99.2→99.6 kB）
 - **未验证**：浏览器视觉回归（同 D28 环境阻塞）——样式为等价替换，风险点集中在 `admin/nodes` 状态下拉的 tone 取值
 
+### D34 · M2+M3 联调回归 —— 已完成
+
+- **产出**：`tests/test_regression.py` 5 条跨模块用例（HTTP → service → DB），补在既有单点用例之上
+  1. 全链路：提交 → `schedule_once` 占槽 → `finish_due_jobs` → 详情 `completed` → `usage/me` 合计 → 配额归零 → 节点三计数器归零
+  2. 取消**运行中**作业：配额 + GPU/CPU/内存三类槽位全部返还，不产生流水，重复取消 409
+  3. 提交越界（`num_nodes=0`、负值、`walltime_min=0`、空名称、`group_id=0`）逐项 422
+  4. 分页与查询边界（`limit=0/201`、`skip=-1`、未知状态）逐项 422
+  5. 停用资源组：成员 `quotas/me` 不再返回该组，再次提交 404
+- **回归揪出的真 bug**：`_finalize_job` 的 `ended_at` 原本写 `func.now()`，而计费用的是注入的 `current`。两者在真实时钟下几乎相等所以旧用例全绿，但一旦回放/注入时间（如 2026-03-02 起跑），作业详情 `gpu_minutes` 会算成 72 万分钟，与 `usage_events.duration_min=60` 对不上。已改为统一写 `current`，作业详情与计费流水同源。
+- **证据**：pytest **158 passed**（+5）；`ruff check` / `ruff format` 全过
+
 ### 下一步
 
-- D34 M2+M3 联调回归：越权、边界、状态机、配额边界用例补齐
+- D35 M3 验收：汇总验收清单，标注 D28 环境阻塞项，收口 M3
 
