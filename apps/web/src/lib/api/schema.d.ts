@@ -392,6 +392,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Monthly billing by user x group (admin sees all) */
+        get: operations["monthly_report_api_v1_reports_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/monthly/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh the monthly materialized view (admin) */
+        post: operations["refresh_monthly_api_v1_reports_monthly_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -682,6 +716,33 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** MonthlyBillingReport */
+        MonthlyBillingReport: {
+            /** Items */
+            items: components["schemas"]["MonthlyBillingRow"][];
+            /** Total Gpu Hours */
+            total_gpu_hours: string;
+        };
+        /**
+         * MonthlyBillingRow
+         * @description One month x user x group bucket (F6.1).
+         */
+        MonthlyBillingRow: {
+            /** Month */
+            month: string;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string | null;
+            /** Group Id */
+            group_id: number;
+            /** Group Name */
+            group_name: string | null;
+            /** Gpu Hours */
+            gpu_hours: string;
+            /** Job Count */
+            job_count: number;
+        };
         /**
          * NodeCreate
          * @description A freshly registered node starts ``online`` with zero GPUs in use.
@@ -853,6 +914,13 @@ export interface components {
         RefreshRequest: {
             /** Refresh Token */
             refresh_token: string;
+        };
+        /** RefreshResult */
+        RefreshResult: {
+            /** Refreshed */
+            refreshed: boolean;
+            /** Detail */
+            detail: string;
         };
         /** RoleRead */
         RoleRead: {
@@ -2000,6 +2068,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monthly_report_api_v1_reports_monthly_get: {
+        parameters: {
+            query?: {
+                /** @description Admin only: filter by user */
+                user_id?: number | null;
+                group_id?: number | null;
+                /** @description First month to include */
+                since?: string | null;
+                /** @description Last month to include */
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyBillingReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_monthly_api_v1_reports_monthly_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshResult"];
                 };
             };
         };

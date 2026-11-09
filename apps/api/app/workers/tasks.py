@@ -6,7 +6,7 @@ from typing import Any
 
 from app.core.redis import get_redis
 from app.db.session import async_session_factory
-from app.services import scheduler_service
+from app.services import report_service, scheduler_service
 
 
 async def ping(ctx: dict[str, Any], message: str = "pong") -> str:
@@ -26,3 +26,12 @@ async def schedule_jobs(_ctx: dict[str, Any]) -> int:
         started = await scheduler_service.schedule_once(db, redis=redis)
         await scheduler_service.finish_due_jobs(db, redis=redis)
         return started
+
+
+async def refresh_monthly_report(_ctx: dict[str, Any]) -> bool:
+    """Hourly ``REFRESH MATERIALIZED VIEW CONCURRENTLY`` (F6.1).
+
+    Returns ``False`` on databases without materialized views (SQLite).
+    """
+    async with async_session_factory() as db:
+        return await report_service.refresh_monthly_billing(db)

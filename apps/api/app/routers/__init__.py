@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.routers import auth, groups, health, jobs, nodes, quotas, usage, users
+from app.routers import auth, groups, health, jobs, nodes, quotas, reports, usage, users
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -12,6 +12,7 @@ api_router.include_router(nodes.router)
 api_router.include_router(quotas.router)
 api_router.include_router(jobs.router)
 api_router.include_router(usage.router)
+api_router.include_router(reports.router)
 
 health_router = health.router
 

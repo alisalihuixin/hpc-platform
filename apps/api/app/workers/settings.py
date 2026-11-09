@@ -11,10 +11,11 @@ import asyncio
 import logging
 from contextlib import suppress
 
+from arq import cron
 from arq.connections import RedisSettings
 
 from app.core.config import settings
-from app.workers.tasks import ping, schedule_jobs
+from app.workers.tasks import ping, refresh_monthly_report, schedule_jobs
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,9 @@ async def shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [ping, schedule_jobs]
+    functions = [ping, schedule_jobs, refresh_monthly_report]
+    # Hourly at :05 so the refresh never collides with the scheduler poll.
+    cron_jobs = [cron(refresh_monthly_report, minute=5)]
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
