@@ -9,6 +9,7 @@
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
 | 单元测试 | 全绿 | **168 passed**（≈20.9s） | SQLite + fakeredis，无需外部依赖 |
+| 测试覆盖率 | ≥ 80% | **80.09%**（1924 语句 / 383 未覆盖） | `make cov`（`--cov-fail-under=80`） |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -110,6 +111,11 @@
 | 项 | 状态 | 原因 |
 |---|---|---|
 | 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms 已验证（§2.6）；浏览器渲染层待人工复核 |
-| 测试覆盖率 | 待测 | 本机 `.venv` 无 pip，`uv pip` 解析过慢，pytest-cov 未安装 |
 | 前端浏览器 E2E | 待测 | 需 `npm run dev` + 浏览器 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
+
+### 3.1 覆盖率结构说明
+
+- 核心业务（`billing_service` / `scheduling_policy` / 全部 `models` / `schemas`）为 96%–100%
+- 0% 的两处是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
+- 偏低：`node_service` 41%、`user_service` 49%、`group_service` 49%——多为 404/冲突分支，已被对应路由用例间接覆盖主路径，剩余是防御性分支

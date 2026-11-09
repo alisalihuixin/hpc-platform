@@ -457,3 +457,9 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **顺带修的 bug**：`initial_data._ensure_group` 访问 `group.members` 触发 async 懒加载 → `make seed` 在组已存在时直接 `MissingGreenlet` 崩溃。改为直接查/插 `user_groups` 关联表，命令幂等
 - **仍未闭环**：浏览器渲染层（需人工开两个窗口）、真实 PG/Redis 栈
 
+### 追加 · 覆盖率门槛（D40 后）
+
+- 安装 `pytest-cov` 并写入 dev 依赖；`make cov` 使用 `--cov-fail-under=80`，低于门槛直接失败
+- 实测 **80.09%**（1924 语句 / 383 未覆盖）；核心计费、策略、模型、Schema 为 96%–100%
+- 0% 的 `initial_data.py` 与 `workers/*` 属胶水代码；`node/user/group_service` 的缺口集中在 404/冲突等防御分支
+
