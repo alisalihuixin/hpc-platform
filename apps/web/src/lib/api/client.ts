@@ -22,6 +22,7 @@ import type {
   LoginRequest,
   LogoutRequest,
   Message,
+  MonthlyBillingReport,
   NodeCreate,
   NodeList,
   NodeRead,
@@ -31,6 +32,7 @@ import type {
   QuotaRead,
   QuotaUpdate,
   RefreshRequest,
+  RefreshResult,
   Token,
   UserCreate,
   UserList,
@@ -62,6 +64,7 @@ export const endpoints = {
   quotas: '/api/v1/quotas',
   quotasMe: '/api/v1/quotas/me',
   usageMe: '/api/v1/usage/me',
+  reportsMonthly: '/api/v1/reports/monthly',
 } satisfies Record<string, keyof paths>;
 
 export class ApiError extends Error {
@@ -351,5 +354,23 @@ export const usageApi = {
     return request<GroupUsageRanking>(
       `/api/v1/usage/groups/${groupId}${query({ ...params })}`,
     );
+  },
+};
+
+// ---- F6 reports ----------------------------------------------------------
+export interface ReportQuery {
+  user_id?: number;
+  group_id?: number;
+  since?: string;
+  until?: string;
+}
+
+export const reportsApi = {
+  async monthly(params: ReportQuery = {}): Promise<MonthlyBillingReport> {
+    return request<MonthlyBillingReport>(`${endpoints.reportsMonthly}${query({ ...params })}`);
+  },
+
+  async refresh(): Promise<RefreshResult> {
+    return request<RefreshResult>(`${endpoints.reportsMonthly}/refresh`, { method: 'POST' });
   },
 };

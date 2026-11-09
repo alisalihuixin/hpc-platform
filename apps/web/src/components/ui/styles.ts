@@ -20,7 +20,7 @@ export const panel = `${card} p-5`;
 export const buttonPrimary =
   'rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50';
 export const buttonSecondary =
-  'rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50';
+  'rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50';
 export const buttonToolbar =
   'rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50';
 

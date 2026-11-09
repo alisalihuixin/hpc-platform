@@ -49,3 +49,8 @@ export type UsageEventRead = Schemas['UsageEventRead'];
 export type UserUsage = Schemas['UserUsage'];
 export type UserUsageRank = Schemas['UserUsageRank'];
 export type GroupUsageRanking = Schemas['GroupUsageRanking'];
+
+// F6 reports
+export type MonthlyBillingRow = Schemas['MonthlyBillingRow'];
+export type MonthlyBillingReport = Schemas['MonthlyBillingReport'];
+export type RefreshResult = Schemas['RefreshResult'];
