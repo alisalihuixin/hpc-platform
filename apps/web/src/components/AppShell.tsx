@@ -100,6 +100,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
+        {/* Narrow viewports hide the sidebar; give them a scrollable nav bar. */}
+        <nav className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-3 py-2 md:hidden">
+          {items.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-sm ${
+                item.href === activeHref
+                  ? 'bg-brand-50 font-medium text-brand-700'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
