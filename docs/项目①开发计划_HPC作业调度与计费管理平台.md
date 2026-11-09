@@ -343,7 +343,43 @@ D17 作业模型 ─────────────────────
 - **回归揪出的真 bug**：`_finalize_job` 的 `ended_at` 原本写 `func.now()`，而计费用的是注入的 `current`。两者在真实时钟下几乎相等所以旧用例全绿，但一旦回放/注入时间（如 2026-03-02 起跑），作业详情 `gpu_minutes` 会算成 72 万分钟，与 `usage_events.duration_min=60` 对不上。已改为统一写 `current`，作业详情与计费流水同源。
 - **证据**：pytest **158 passed**（+5）；`ruff check` / `ruff format` 全过
 
+### D35 · M3 验收 —— 已完成（除 D28 实测项）
+
+| # | 验收项 | 结论 | 证据 |
+|---|---|---|---|
+| 1 | 状态变更即发布、非 admin 只见自己的作业 | ✅ | `test_job_events.py` 发布/订阅往返、用户过滤、四处变更点 |
+| 2 | 前端收到 `job.updated` 即刷新 | ✅ 代码级 | `fetch` 流式 + 401 刷新重连；列表 300ms 去抖、详情按 `job_id` 过滤 |
+| 3 | 双浏览器 ≤2s 刷新 | ⏳ 环境阻塞 | Docker Desktop 未运行；本机 6379 的 Redis 需认证，`.env` 是无密码 URL |
+| 4 | 节点管理页可用 | ✅ | `/admin/nodes` CRUD + 上下线；`offline`/`draining` 不接收新作业（调度器用例） |
+| 5 | 配额管理页可用 | ✅ | `/admin/quotas` 编辑；`gpu_limit < gpu_used` 前后端双校验（409） |
+| 6 | 用户管理页可用 | ✅ | `/admin/users` 新建/角色/启停/重置密码；角色变更无需重新登录 |
+| 7 | 资源组管理页可用 | ✅ | `/admin/groups` 建组即建配额、成员整体覆盖、软删除拦截占卡组 |
+| 8 | 前端规则统一 | ✅ | 9 个页面复用 `components/ui/*`，类名字面量清零 |
+| 9 | 联调回归 | ✅ | `test_regression.py` 5 条跨模块用例；全量 **158 passed** |
+
+**收口命令与结果**
+
+```
+cd apps/api && pytest -q          → 158 passed in 14.48s
+ruff check app tests              → All checks passed
+ruff format --check app tests     → 79 files already formatted
+cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
+```
+
+**阻塞项复现步骤（D28，待环境恢复）**
+
+1. 提供可用的 Redis（本机需 `requirepass` 对应 `REDIS_URL`，或启动 Docker Desktop 后 `make up`）
+2. 同时起 API + ARQ worker + Web
+3. 浏览器 A 登 admin 打开 `/jobs`，浏览器 B 登 user 提交/取消作业
+4. 记录 A 侧列表刷新延迟，断言 ≤2s；把实测值补进 `docs/metrics.md`
+
+**遗留（不阻塞 M3 收口）**
+
+- PRD 口径偏差 4 项（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）
+- 登录 P95、限流并发压测未做（需 load 工具）
+- D28 双浏览器实测
+
 ### 下一步
 
-- D35 M3 验收：汇总验收清单，标注 D28 环境阻塞项，收口 M3
+- D36 F6.1 月结物化视图 `mv_monthly_billing` + 定时刷新（进入 M4 报表）
 
