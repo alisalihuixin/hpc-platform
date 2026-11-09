@@ -4,7 +4,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 
 .PHONY: help up down restart logs ps rebuild migrate makemigration seed api-shell \
-        test lint fmt gen-api fe-dev api-dev clean
+        test cov lint fmt gen-api fe-dev api-dev clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -45,6 +45,9 @@ api-shell: ## Shell into the api container
 
 test: ## Run backend tests
 	cd apps/api && pytest -q
+
+cov: ## Run backend tests with coverage (fails under 80%)
+	cd apps/api && pytest -q --cov=app --cov-report=term --cov-fail-under=80
 
 lint: ## Ruff check + format check
 	cd apps/api && ruff check . && ruff format --check .
