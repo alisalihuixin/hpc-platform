@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.security import hash_password
+from app.db.base import user_groups
 from app.db.session import async_session_factory
 from app.models.group import Group
 from app.models.quota import Quota
@@ -66,10 +67,19 @@ async def _ensure_group(
         )
         print(f"+ created group {name} (gpu_limit={gpu_limit})")
 
-    member_ids = {member.id for member in group.members}
+    # Read/insert the association rows directly: touching ``group.members`` would
+    # trigger a lazy load, which raises under AsyncSession.  This also makes the
+    # command idempotent when the group already exists.
+    existing = set(
+        (
+            await db.scalars(
+                select(user_groups.c.user_id).where(user_groups.c.group_id == group.id)
+            )
+        ).all()
+    )
     for member in members:
-        if member.id not in member_ids:
-            group.members.append(member)
+        if member.id not in existing:
+            await db.execute(insert(user_groups).values(user_id=member.id, group_id=group.id))
             print(f"+ added {member.email} to {name}")
     return group
 
