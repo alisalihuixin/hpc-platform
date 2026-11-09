@@ -34,7 +34,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 
 from redis.asyncio import Redis
-from sqlalchemy import func, insert, or_, select, update
+from sqlalchemy import insert, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -194,7 +194,7 @@ async def _finalize_job(
             Job.status == JobStatus.RUNNING.value,
             *extra_conditions,
         )
-        .values(status=status.value, ended_at=func.now())
+        .values(status=status.value, ended_at=current)
     )
     if transition.rowcount != 1:
         # Someone else finished it first; undo nothing and move on.
@@ -224,7 +224,7 @@ async def _finalize_job(
                 group_id=row.group_id,
                 gpus=row.num_gpus,
                 started_at=row.started_at,
-                ended_at=func.now(),
+                ended_at=current,
                 duration_min=duration_min,
                 gpu_hours=billing_service.gpu_hours(row.num_gpus, duration_min),
                 rate_snapshot=billing_service.rate_snapshot(row.gpu_model),
