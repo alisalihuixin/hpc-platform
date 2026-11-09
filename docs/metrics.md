@@ -104,14 +104,15 @@
 
 - 提交 → 调度 → 完成：`walltime_min=1` 的作业 4s 内进入 `completed`，`gpu_minutes=2`（2 卡 × 1 分钟向上取整），配额与节点槽位归零
 - SSE 投递：订阅端（admin）在另一客户端提交后 **122.4ms** 收到 `queued` 事件（本机 HTTP 层，目标 ≤2s）
-- 说明：链路走的是真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis；浏览器渲染层仍需人工开两个窗口复核
+- **真实浏览器**（`npm run dev` + 浏览器自动化）：登录 admin 成功跳转 `/dashboard`，`/jobs` 渲染出 2 行作业（#1 已完成 / #2 失败）；服务端日志同时记录 `GET /api/v1/jobs/stream 200`，说明前端 SSE 订阅在浏览器里真实建立
+- 说明：链路走真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis；「双窗口同时对照」仍需人工，但两端各自已验证
 
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
 |---|---|---|
-| 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms 已验证（§2.6）；浏览器渲染层待人工复核 |
-| 前端浏览器 E2E | 待测 | 需 `npm run dev` + 浏览器 |
+| 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms + 浏览器内 `/jobs/stream` 已建立；双窗口同时对照待人工 |
+| 前端浏览器 E2E | 部分实测 | 登录 → `/jobs` 渲染通过；其余管理页未逐页点按 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
 
 ### 3.1 覆盖率结构说明

@@ -463,3 +463,9 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - 实测 **80.09%**（1924 语句 / 383 未覆盖）；核心计费、策略、模型、Schema 为 96%–100%
 - 0% 的 `initial_data.py` 与 `workers/*` 属胶水代码；`node/user/group_service` 的缺口集中在 404/冲突等防御分支
 
+### 追加 · 浏览器实测与移动端导航修复
+
+- **浏览器验证 PASS**：`dev_stack` + `npm run dev` 下，真实浏览器登录 admin → 跳转 `/dashboard` → `/jobs` 渲染出 2 行作业（含名称/状态/资源/walltime），服务端日志记录 `GET /api/v1/jobs/stream 200`，证明 SSE 订阅在浏览器内建立
+- **发现并修复的 UX 缺陷**：侧栏为 `hidden md:flex`，窄视口（<768px）完全无导航且没有替代入口。已在 `AppShell` 的 header 下增加 `md:hidden` 的可横向滚动导航条，与侧栏共用同一份 `items` 与高亮逻辑
+- **未闭环**：双窗口同时对照（需人工）；管理页逐页点按
+
