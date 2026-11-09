@@ -14,6 +14,8 @@ from typing import Annotated, Any
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redis import is_token_blacklisted
 from app.core.security import decode_token
@@ -60,6 +62,19 @@ async def get_token_payload(
 TokenPayload = Annotated[dict[str, Any], Depends(get_token_payload)]
 
 
+async def _set_audit_actor(db: AsyncSession, user_id: int) -> None:
+    """Expose the acting user to the audit triggers (F7.2).
+
+    ``set_config(..., true)`` is transaction-local, so the value never leaks to
+    another request that reuses the pooled connection.  SQLite has no session
+    variables and no triggers that need them, so this is a no-op there.
+    """
+    bind = db.bind
+    if bind is None or bind.dialect.name != "postgresql":
+        return
+    await db.execute(text("SELECT set_config('app.user_id', :uid, true)"), {"uid": str(user_id)})
+
+
 async def get_current_user(payload: TokenPayload, db: SessionDep) -> User:
     try:
         user_id = int(payload["sub"])
@@ -71,6 +86,7 @@ async def get_current_user(payload: TokenPayload, db: SessionDep) -> User:
         raise _unauthorized("User no longer exists")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User is disabled")
+    await _set_audit_actor(db, user.id)
     return user
 
 

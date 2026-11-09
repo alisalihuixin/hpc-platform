@@ -426,10 +426,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audit rows (admin) */
+        get: operations["list_audit_logs_api_v1_audit_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AuditLogList */
+        AuditLogList: {
+            /** Items */
+            items: components["schemas"]["AuditLogRead"][];
+            /** Total */
+            total: number;
+        };
+        /** AuditLogRead */
+        AuditLogRead: {
+            /** Id */
+            id: number;
+            /** Table Name */
+            table_name: string;
+            /** Record Id */
+            record_id: number;
+            /** Action */
+            action: string;
+            /** Changed By */
+            changed_by: string | null;
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            } | null;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** GroupCreate */
         GroupCreate: {
             /** Name */
@@ -2125,6 +2175,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshResult"];
+                };
+            };
+        };
+    };
+    list_audit_logs_api_v1_audit_logs_get: {
+        parameters: {
+            query?: {
+                table_name?: string | null;
+                record_id?: number | null;
+                action?: ("update" | "delete") | null;
+                changed_by?: string | null;
+                /** @description changed_at >= this */
+                since?: string | null;
+                /** @description changed_at <= this */
+                until?: string | null;
+                skip?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

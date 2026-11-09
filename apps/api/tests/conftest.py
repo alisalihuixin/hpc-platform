@@ -21,11 +21,13 @@ from collections.abc import AsyncGenerator, Callable  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from fakeredis import aioredis as fakeredis_aioredis  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.core.redis import get_redis  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
+from app.db import audit_triggers  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -53,6 +55,9 @@ async def engine():
     )
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Migrations install the audit triggers; the pytest bootstrap must match.
+        for statement in audit_triggers.sqlite_statements():
+            await conn.execute(text(statement))
     yield eng
     await eng.dispose()
 

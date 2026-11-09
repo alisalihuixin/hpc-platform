@@ -4,6 +4,7 @@ Importing this package registers every table on ``Base.metadata`` - Alembic's
 ``env.py`` relies on that side effect.
 """
 
+from app.models.audit_log import AuditLog
 from app.models.group import Group
 from app.models.job import Job, JobStatus
 from app.models.node import Node, NodeStatus
@@ -13,6 +14,7 @@ from app.models.usage_event import UsageEvent
 from app.models.user import User
 
 __all__ = [
+    "AuditLog",
     "Group",
     "Job",
     "JobStatus",
