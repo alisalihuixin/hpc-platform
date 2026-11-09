@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35；仅 D28 双浏览器实测待环境）** ｜ **M4 进行中**（D36 物化视图、D37 报表页、D38 审计、D39 看板与审计页完成）｜ 下一步 D40 收口上线
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35）** ｜ **M4 报表 + 审计 + 收口 ✅ 完成（D36–D40）** ｜ 待补：D28 双浏览器 SSE 实测、PG 侧实测、真实域名部署
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -125,6 +125,7 @@ hpc-platform/
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
+| 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms、作业列表 5.58ms** | SQLite，10 轮，`scripts/bench_queries.py` |
 | 登录接口 P95 延迟 | < 200ms | 待测 | 需 load 压测，M1 未做 |
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
@@ -310,9 +311,9 @@ hpc-platform/
 
 - 真实 Redis + 浏览器 SSE 联动待 D28 起服务实测（双浏览器 ≤2s 同步）。
 
-### M4 报表 + 审计 + 上线 —— ⏳ 进行中（D36 完成）
+### M4 报表 + 审计 + 上线 —— ✅ 完成（D36–D40）
 
-> D36：月结物化视图与报表接口已落地；D37–D40 为报表页、审计、上线。
+> D36–D39 见上；D40 收口：看板聚合由两次降为一次、1 万作业压测 6/6 p95 < 200ms、worker 默认随栈启动、上线清单见第 5 节。
 
 **已完成**
 
@@ -324,6 +325,7 @@ hpc-platform/
 - [x] F7.2 操作人注入：PG 走 `set_config('app.user_id', ..., true)`，后台写记为 `system`
 - [x] D39 平台看板：`GET /reports/dashboard` + `/dashboard` admin 区块（totals / 6 月趋势 / TOP 用户与组）
 - [x] D39 审计页 `/admin/audit`：表名/动作/操作人/时间窗筛选 + 分页 + 变更摘要
+- [x] D40 压测与收口：`scripts/bench_queries.py`（1 万作业，6/6 p95 < 200ms）+ 看板聚合改写 + worker 默认启动
 
 **关键实现**
 
@@ -335,7 +337,8 @@ hpc-platform/
 - 审计的 `hashed_password` 在 PG 用 `to_jsonb(...) - 'hashed_password'` 剔除，SQLite 触发器只挑选白名单列。
 - [`dashboard/page.tsx`](apps/web/src/app/(app)/dashboard/page.tsx)：看板用 Tailwind 自绘柱状趋势，未引入 ECharts（首屏预算优先，偏差已登记在开发计划 D39）。
 - [`admin/audit/page.tsx`](apps/web/src/app/(app)/admin/audit/page.tsx)：变更摘要只展示前 3 个变化字段，`delete` 只显示被删记录标识。
-- 未在本机验证：PG 物化视图路径与 PG 触发器 `app.user_id` 链路（Docker 未运行）；SQLite 兜底路径分别有 5 条 / 4 条用例覆盖。
+- [`bench_queries.py`](apps/api/scripts/bench_queries.py)：临时 SQLite 造 1 万作业 + 1 万流水，对 6 条读路径跑 p50/p95/max，p95 超 200ms 即非零退出（可作为 CI 基线）。
+- 未在本机验证：PG 物化视图路径与 PG 触发器 `app.user_id` 链路（Docker 未运行）；SQLite 兜底路径分别有 5 条 / 4 条用例覆盖；压测数字同样来自 SQLite。
 
 ---
 
@@ -368,6 +371,19 @@ make seed      # 创建演示账号
 | user | `user@hpc.local` / `user` | `user12345` |
 
 > 数据库 / Redis 端口（5432 / 6379）与 API（8000）、Web（3000）均已映射到宿主机，便于本地调试。
+
+### 上线检查清单
+
+1. `.env`：改 `POSTGRES_PASSWORD`、`JWT_SECRET_KEY`、`FIRST_ADMIN_PASSWORD`，不要把 `.env.example` 的值带上线
+2. `make up`：现在默认包含 `worker`（ARQ 调度 + 每小时物化视图刷新），少了它作业会永远停在 queued
+3. `make migrate` → `make seed`，确认 `/health/ready` 的 db / redis 均为 ok
+4. admin 登录 → 建资源组（自动带配额）→ 注册节点 → 成员入组
+5. 提交一个作业，确认 2s 内进入 running（worker 在轮询）
+6. 开两个浏览器对照 `/jobs`，确认状态变更 ≤2s 刷新（D28 验收项）
+7. `/reports` 有月结数据、`/admin/audit` 有留痕（改一次节点配额即可看到）
+8. HTTPS：把 `deploy/Caddyfile` 的 `:80` 改成你的域名（Caddy 会自动申请证书），并在 compose 中放开 443
+9. 备份：`pgdata` / `redisdata` 两个 volume 纳入备份策略
+10. 压测基线：`cd apps/api && python scripts/bench_queries.py`，与 `docs/metrics.md` 的 p95 对照
 
 ### 本地开发（不用 Docker）
 

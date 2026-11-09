@@ -417,7 +417,29 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **证据**：pytest **168 passed**（+1：看板 totals/趋势补零/TOP 排序/非 admin 403）；`ruff check` + `format` 全过；`typecheck` / `lint` / `build` 全过（**16 条路由**；`/dashboard` 92.2 kB、`/admin/audit` 92.8 kB）
 - **未验证**：浏览器图表渲染与筛选交互（同 D28 环境阻塞）
 
-### 下一步
+### D40 · 收口：查询优化 + 压测 + 上线 —— 已完成
 
-- D40 收口：慢查询优化（复合索引/改写）+ 种子数据压测 p95 + README/metrics 终稿 + 上线清单
+- **查询改写**：`dashboard_overview` 原先对 `usage_events` 聚合两次（趋势窗口 + 本月 TOP），改为一次聚合后按月份分流——本月是趋势窗口的子集，省掉一次全表扫描。
+- **索引核查**：`EXPLAIN QUERY PLAN` 确认作业列表命中 `ix_jobs_user_created_at`；`nodes.status`、`(status, queued_at)`、`(user_id, started_at)` 等热点索引均已在早期迁移中建好，本轮无需新增迁移。
+- **压测脚本**：`scripts/bench_queries.py` —— 自建 1 万作业 + 1 万流水 + 100 节点，对 6 条读路径各跑 10 轮取 p50/p95/max，p95 超 200ms 即非零退出。
+
+| 查询 | p50 | p95 | max |
+|---|---|---|---|
+| 作业列表（用户 + 分页 50） | 4.19 ms | 5.58 ms | 7.52 ms |
+| 作业列表（状态 + 分页 50） | 4.13 ms | 4.69 ms | 5.38 ms |
+| 个人用量明细 | 19.46 ms | 23.63 ms | 77.30 ms |
+| 组用量排行 | 18.02 ms | 20.34 ms | 27.37 ms |
+| 月结聚合（按组） | 7.23 ms | 8.28 ms | 8.38 ms |
+| 平台看板（totals/趋势/TOP） | 32.13 ms | 34.95 ms | 38.51 ms |
+
+> 6/6 p95 < 200 ms（SQLite，1 万作业，10 轮）。SQLite 单进程无网络开销，数字是 PG 的下界参考。
+
+- **上线准备**：`docker-compose.yml` 移除 worker 的 `profiles` —— 此前 `make up` 不启动 ARQ worker，作业会永远停在 queued；现在默认随栈启动。上线检查清单写入 README。
+- **证据**：pytest **168 passed**；`ruff check` / `format` 全过（含 `scripts/`）；前端 16 条路由 build 通过
+- **未验证**：PG 上的 p95、真实域名 HTTPS、Docker 全栈启动（本机 Docker 未运行）
+
+### 项目①状态
+
+- M1–M3 完成，M4 除「PG 实测 / 浏览器 E2E」外完成
+- 剩余待办：D28 双浏览器 SSE 实测、PG 物化视图与触发器实测、登录 P95 压测、真实域名部署
 

@@ -29,6 +29,7 @@
 | 月结报表 | 聚合口径与流水一致 | **2 月/1 月共 2 个 bucket，冲正折负后合计 `6.5000` 卡时；`job_count` 去重** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 数据与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
+| 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms** | SQLite，10 轮，见 §2.4 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
@@ -64,6 +65,23 @@
   - 重复回收幂等（只产生 1 条流水）
   - 历史无租约数据自动收编
 
+### 2.4 读路径压测（1 万作业）
+
+命令：`cd apps/api && python scripts/bench_queries.py --jobs 10000 --runs 10`
+
+| 查询 | p50 | p95 | max |
+|---|---|---|---|
+| 作业列表（用户 + 分页 50） | 4.19 ms | 5.58 ms | 7.52 ms |
+| 作业列表（状态 + 分页 50） | 4.13 ms | 4.69 ms | 5.38 ms |
+| 个人用量明细 | 19.46 ms | 23.63 ms | 77.30 ms |
+| 组用量排行 | 18.02 ms | 20.34 ms | 27.37 ms |
+| 月结聚合（按组） | 7.23 ms | 8.28 ms | 8.38 ms |
+| 平台看板（totals/趋势/TOP） | 32.13 ms | 34.95 ms | 38.51 ms |
+
+- **6/6 p95 < 200 ms**（SQLite，单进程无网络开销，是 PostgreSQL 的下界参考）
+- `EXPLAIN QUERY PLAN` 确认作业列表走 `ix_jobs_user_created_at`
+- 改写：看板原先聚合两次（趋势窗口 + 本月），合并为一次后按月份分流
+
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
@@ -72,4 +90,4 @@
 | 登录接口 P95 延迟 | 待测 | 尚未接入压测 |
 | 测试覆盖率 | 待测 | 尚未接入 pytest-cov |
 | 前端浏览器 E2E | 待测 | 同上，需 PG/Redis/worker/web 全栈 |
-| 1 万作业压测 p95 | 待测 | M4 D40 范围 |
+| PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
