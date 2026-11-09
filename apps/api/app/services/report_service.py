@@ -232,13 +232,17 @@ async def dashboard_overview(
     for index in range(months):
         year, month = _shift_month(start_year, start_month, index)
         buckets[f"{year:04d}-{month:02d}"] = Decimal(0)
+
+    # One aggregation feeds both the trend and the TOP lists: the current month
+    # is a subset of the trend window, so a second full scan is wasted work.
+    current_month = f"{moment.year:04d}-{moment.month:02d}"
+    user_totals: dict[int, tuple[str | None, Decimal]] = {}
+    group_totals: dict[int, tuple[str | None, Decimal]] = {}
     for row in await monthly_billing(db, since=datetime(start_year, start_month, 1, tzinfo=UTC)):
         if row.month in buckets:
             buckets[row.month] += row.gpu_hours
-
-    user_totals: dict[int, tuple[str | None, Decimal]] = {}
-    group_totals: dict[int, tuple[str | None, Decimal]] = {}
-    for row in await monthly_billing(db, since=datetime(moment.year, moment.month, 1, tzinfo=UTC)):
+        if row.month != current_month:
+            continue
         name, hours = user_totals.get(row.user_id, (row.username, Decimal(0)))
         user_totals[row.user_id] = (name, hours + row.gpu_hours)
         name, hours = group_totals.get(row.group_id, (row.group_name, Decimal(0)))
