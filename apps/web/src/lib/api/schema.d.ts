@@ -426,6 +426,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Platform overview: totals, 6-month trend, TOP users/groups (admin) */
+        get: operations["dashboard_api_v1_reports_dashboard_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit-logs": {
         parameters: {
             query?: never;
@@ -479,6 +496,50 @@ export interface components {
             after: {
                 [key: string]: unknown;
             } | null;
+        };
+        /**
+         * DashboardReport
+         * @description Platform overview for the admin dashboard (D39).
+         */
+        DashboardReport: {
+            totals: components["schemas"]["DashboardTotals"];
+            /** Trend */
+            trend: components["schemas"]["DashboardTrendPoint"][];
+            /** Top Users */
+            top_users: components["schemas"]["DashboardTopEntry"][];
+            /** Top Groups */
+            top_groups: components["schemas"]["DashboardTopEntry"][];
+        };
+        /** DashboardTopEntry */
+        DashboardTopEntry: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Gpu Hours */
+            gpu_hours: string;
+        };
+        /** DashboardTotals */
+        DashboardTotals: {
+            /** Running Jobs */
+            running_jobs: number;
+            /** Queued Jobs */
+            queued_jobs: number;
+            /** Online Nodes */
+            online_nodes: number;
+            /** Total Nodes */
+            total_nodes: number;
+            /** Gpu Used */
+            gpu_used: number;
+            /** Gpu Total */
+            gpu_total: number;
+        };
+        /** DashboardTrendPoint */
+        DashboardTrendPoint: {
+            /** Month */
+            month: string;
+            /** Gpu Hours */
+            gpu_hours: string;
         };
         /** GroupCreate */
         GroupCreate: {
@@ -2175,6 +2236,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefreshResult"];
+                };
+            };
+        };
+    };
+    dashboard_api_v1_reports_dashboard_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardReport"];
                 };
             };
         };

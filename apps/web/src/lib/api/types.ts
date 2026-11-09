@@ -54,3 +54,11 @@ export type GroupUsageRanking = Schemas['GroupUsageRanking'];
 export type MonthlyBillingRow = Schemas['MonthlyBillingRow'];
 export type MonthlyBillingReport = Schemas['MonthlyBillingReport'];
 export type RefreshResult = Schemas['RefreshResult'];
+export type DashboardReport = Schemas['DashboardReport'];
+export type DashboardTotals = Schemas['DashboardTotals'];
+export type DashboardTrendPoint = Schemas['DashboardTrendPoint'];
+export type DashboardTopEntry = Schemas['DashboardTopEntry'];
+
+// F7 audit
+export type AuditLogRead = Schemas['AuditLogRead'];
+export type AuditLogList = Schemas['AuditLogList'];

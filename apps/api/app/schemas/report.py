@@ -27,3 +27,32 @@ class MonthlyBillingReport(BaseModel):
 class RefreshResult(BaseModel):
     refreshed: bool
     detail: str
+
+
+class DashboardTrendPoint(BaseModel):
+    month: str
+    gpu_hours: Decimal
+
+
+class DashboardTopEntry(BaseModel):
+    id: int
+    name: str | None
+    gpu_hours: Decimal
+
+
+class DashboardTotals(BaseModel):
+    running_jobs: int
+    queued_jobs: int
+    online_nodes: int
+    total_nodes: int
+    gpu_used: int
+    gpu_total: int
+
+
+class DashboardReport(BaseModel):
+    """Platform overview for the admin dashboard (D39)."""
+
+    totals: DashboardTotals
+    trend: list[DashboardTrendPoint]
+    top_users: list[DashboardTopEntry]
+    top_groups: list[DashboardTopEntry]

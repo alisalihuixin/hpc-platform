@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: '/admin/quotas', label: '配额管理', adminOnly: true },
   { href: '/admin/groups', label: '资源组', adminOnly: true },
   { href: '/admin/users', label: '用户管理', adminOnly: true },
+  { href: '/admin/audit', label: '审计日志', adminOnly: true },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {

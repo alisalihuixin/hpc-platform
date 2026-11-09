@@ -9,6 +9,8 @@
  */
 import type { paths } from './schema';
 import type {
+  AuditLogList,
+  DashboardReport,
   GroupCreate,
   GroupList,
   GroupRead,
@@ -65,6 +67,8 @@ export const endpoints = {
   quotasMe: '/api/v1/quotas/me',
   usageMe: '/api/v1/usage/me',
   reportsMonthly: '/api/v1/reports/monthly',
+  reportsDashboard: '/api/v1/reports/dashboard',
+  auditLogs: '/api/v1/audit-logs',
 } satisfies Record<string, keyof paths>;
 
 export class ApiError extends Error {
@@ -372,5 +376,27 @@ export const reportsApi = {
 
   async refresh(): Promise<RefreshResult> {
     return request<RefreshResult>(`${endpoints.reportsMonthly}/refresh`, { method: 'POST' });
+  },
+
+  async dashboard(): Promise<DashboardReport> {
+    return request<DashboardReport>(endpoints.reportsDashboard);
+  },
+};
+
+// ---- F7 audit ------------------------------------------------------------
+export interface AuditQuery {
+  table_name?: string;
+  record_id?: number;
+  action?: 'update' | 'delete';
+  changed_by?: string;
+  since?: string;
+  until?: string;
+  skip?: number;
+  limit?: number;
+}
+
+export const auditApi = {
+  async list(params: AuditQuery = {}): Promise<AuditLogList> {
+    return request<AuditLogList>(`${endpoints.auditLogs}${query({ ...params })}`);
   },
 };

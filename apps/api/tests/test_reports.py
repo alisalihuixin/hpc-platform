@@ -6,7 +6,7 @@ fallback that must stay shape-compatible with ``mv_monthly_billing``.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest_asyncio
@@ -16,6 +16,7 @@ from sqlalchemy import select
 from app.core.security import hash_password
 from app.models.group import Group
 from app.models.job import Job
+from app.models.node import Node
 from app.models.role import Role
 from app.models.usage_event import UsageEvent
 from app.models.user import User
@@ -199,3 +200,82 @@ async def test_refresh_is_a_noop_without_materialized_view(client: AsyncClient, 
     body = response.json()
     assert body["refreshed"] is False
     assert "aggregated live" in body["detail"]
+
+
+async def test_dashboard_totals_trend_and_top(
+    client: AsyncClient, seeded, team, other_user, session_factory
+) -> None:
+    now = datetime.now(UTC)
+    month_start = datetime(now.year, now.month, 1, tzinfo=UTC)
+    async with session_factory() as db:
+        user_id = (await db.scalar(select(User).where(User.email == USER_EMAIL))).id
+        db.add_all(
+            [
+                Node(
+                    hostname="dash-online",
+                    cpu_cores=8,
+                    mem_gb=32,
+                    gpu_total=4,
+                    status="online",
+                ),
+                Node(
+                    hostname="dash-offline",
+                    cpu_cores=8,
+                    mem_gb=32,
+                    gpu_total=4,
+                    status="offline",
+                ),
+                Job(
+                    user_id=user_id,
+                    group_id=team,
+                    name="dash-running",
+                    num_nodes=1,
+                    num_gpus=1,
+                    walltime_min=10,
+                    params={},
+                    status="running",
+                ),
+                Job(
+                    user_id=user_id,
+                    group_id=team,
+                    name="dash-queued",
+                    num_nodes=1,
+                    num_gpus=1,
+                    walltime_min=10,
+                    params={},
+                    status="queued",
+                ),
+            ]
+        )
+        await db.commit()
+
+    await _add_usage(session_factory, user_id, team, gpu_hours="2.0000", started_at=month_start)
+    await _add_usage(
+        session_factory,
+        other_user,
+        team,
+        gpu_hours="5.0000",
+        started_at=month_start,
+        job_name="other-dash-job",
+    )
+
+    admin_headers = await auth_headers(client, ADMIN_EMAIL, ADMIN_PASSWORD)
+    user_headers = await auth_headers(client, USER_EMAIL, USER_PASSWORD)
+    assert (await client.get(f"{API}/reports/dashboard", headers=user_headers)).status_code == 403
+
+    body = (await client.get(f"{API}/reports/dashboard", headers=admin_headers)).json()
+
+    assert body["totals"]["running_jobs"] == 1
+    assert body["totals"]["queued_jobs"] == 1
+    assert body["totals"]["online_nodes"] == 1
+    assert body["totals"]["total_nodes"] == 2
+    assert body["totals"]["gpu_total"] == 8
+
+    assert len(body["trend"]) == 6
+    assert body["trend"][-1]["month"] == f"{now.year:04d}-{now.month:02d}"
+    assert _hours(body["trend"][-1]["gpu_hours"]) == Decimal("7.0000")
+
+    assert body["top_users"][0]["id"] == other_user
+    assert _hours(body["top_users"][0]["gpu_hours"]) == Decimal("5.0000")
+    assert body["top_groups"][0]["id"] == team
+    assert _hours(body["top_groups"][0]["gpu_hours"]) == Decimal("7.0000")

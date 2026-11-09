@@ -12,13 +12,15 @@ Reversal rows are subtracted (``reversed=True``), matching ``usage_service``, an
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.group import Group
+from app.models.job import Job, JobStatus
+from app.models.node import Node, NodeStatus
 from app.models.usage_event import UsageEvent
 from app.models.user import User
 
@@ -176,3 +178,90 @@ async def refresh_monthly_billing(db: AsyncSession, *, concurrently: bool = True
     async with autocommit.connect() as conn:
         await conn.execute(text(statement))
     return True
+
+
+@dataclass(frozen=True)
+class DashboardSnapshot:
+    running_jobs: int
+    queued_jobs: int
+    online_nodes: int
+    total_nodes: int
+    gpu_used: int
+    gpu_total: int
+    #: ``(month, net_gpu_hours)`` oldest first, zero-filled.
+    trend: list[tuple[str, Decimal]]
+    top_users: list[tuple[int, str | None, Decimal]]
+    top_groups: list[tuple[int, str | None, Decimal]]
+
+
+def _shift_month(year: int, month: int, delta: int) -> tuple[int, int]:
+    total = year * 12 + (month - 1) + delta
+    return total // 12, total % 12 + 1
+
+
+async def dashboard_overview(
+    db: AsyncSession, *, now: datetime | None = None, months: int = 6, top: int = 5
+) -> DashboardSnapshot:
+    """Platform-wide numbers for the admin dashboard (D39).
+
+    Reuses :func:`monthly_billing`, so the trend and TOP lists follow the same
+    reversal-aware rule as the report page. Missing months are zero-filled so
+    the chart never has gaps.
+    """
+    moment = now or datetime.now(UTC)
+
+    status_counts = dict(
+        (await db.execute(select(Job.status, func.count()).group_by(Job.status))).all()
+    )
+
+    node_row = (
+        await db.execute(
+            select(
+                func.count().label("total"),
+                func.sum(case((Node.status == NodeStatus.ONLINE.value, 1), else_=0)).label(
+                    "online"
+                ),
+                func.coalesce(func.sum(Node.gpu_used), 0).label("gpu_used"),
+                func.coalesce(func.sum(Node.gpu_total), 0).label("gpu_total"),
+            )
+        )
+    ).one()
+
+    start_year, start_month = _shift_month(moment.year, moment.month, -(months - 1))
+    buckets: dict[str, Decimal] = {}
+    for index in range(months):
+        year, month = _shift_month(start_year, start_month, index)
+        buckets[f"{year:04d}-{month:02d}"] = Decimal(0)
+    for row in await monthly_billing(db, since=datetime(start_year, start_month, 1, tzinfo=UTC)):
+        if row.month in buckets:
+            buckets[row.month] += row.gpu_hours
+
+    user_totals: dict[int, tuple[str | None, Decimal]] = {}
+    group_totals: dict[int, tuple[str | None, Decimal]] = {}
+    for row in await monthly_billing(db, since=datetime(moment.year, moment.month, 1, tzinfo=UTC)):
+        name, hours = user_totals.get(row.user_id, (row.username, Decimal(0)))
+        user_totals[row.user_id] = (name, hours + row.gpu_hours)
+        name, hours = group_totals.get(row.group_id, (row.group_name, Decimal(0)))
+        group_totals[row.group_id] = (name, hours + row.gpu_hours)
+
+    return DashboardSnapshot(
+        running_jobs=int(status_counts.get(JobStatus.RUNNING.value, 0)),
+        queued_jobs=int(status_counts.get(JobStatus.QUEUED.value, 0)),
+        online_nodes=int(node_row.online or 0),
+        total_nodes=int(node_row.total or 0),
+        gpu_used=int(node_row.gpu_used or 0),
+        gpu_total=int(node_row.gpu_total or 0),
+        trend=list(buckets.items()),
+        top_users=[
+            (user_id, name, hours)
+            for user_id, (name, hours) in sorted(
+                user_totals.items(), key=lambda item: item[1][1], reverse=True
+            )[:top]
+        ],
+        top_groups=[
+            (group_id, name, hours)
+            for group_id, (name, hours) in sorted(
+                group_totals.items(), key=lambda item: item[1][1], reverse=True
+            )[:top]
+        ],
+    )

@@ -15,7 +15,15 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.errors import PermissionDeniedError
 from app.deps import CurrentUser, SessionDep, require_roles
-from app.schemas.report import MonthlyBillingReport, MonthlyBillingRow, RefreshResult
+from app.schemas.report import (
+    DashboardReport,
+    DashboardTopEntry,
+    DashboardTotals,
+    DashboardTrendPoint,
+    MonthlyBillingReport,
+    MonthlyBillingRow,
+    RefreshResult,
+)
 from app.services import report_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -78,4 +86,35 @@ async def refresh_monthly(db: SessionDep) -> RefreshResult:
             if refreshed
             else "no materialized view on this database; reports are aggregated live"
         ),
+    )
+
+
+@router.get(
+    "/dashboard",
+    response_model=DashboardReport,
+    dependencies=admin_only,
+    summary="Platform overview: totals, 6-month trend, TOP users/groups (admin)",
+)
+async def dashboard(db: SessionDep) -> DashboardReport:
+    snapshot = await report_service.dashboard_overview(db)
+    return DashboardReport(
+        totals=DashboardTotals(
+            running_jobs=snapshot.running_jobs,
+            queued_jobs=snapshot.queued_jobs,
+            online_nodes=snapshot.online_nodes,
+            total_nodes=snapshot.total_nodes,
+            gpu_used=snapshot.gpu_used,
+            gpu_total=snapshot.gpu_total,
+        ),
+        trend=[
+            DashboardTrendPoint(month=month, gpu_hours=hours) for month, hours in snapshot.trend
+        ],
+        top_users=[
+            DashboardTopEntry(id=user_id, name=name, gpu_hours=hours)
+            for user_id, name, hours in snapshot.top_users
+        ],
+        top_groups=[
+            DashboardTopEntry(id=group_id, name=name, gpu_hours=hours)
+            for group_id, name, hours in snapshot.top_groups
+        ],
     )
