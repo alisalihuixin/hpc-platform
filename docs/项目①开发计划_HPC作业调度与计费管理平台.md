@@ -450,3 +450,10 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **调参**：默认 `BCRYPT_ROUNDS` 12 → 10（OWASP 下限）。实测串行 p95 350.5 → 108.3ms、吞吐 16.6 → 39.0 logins/s；并发/串行 p50 比值 1.8–2.4（阻塞时会接近 10）
 - **证据**：pytest **168 passed**；`ruff` 全过；数据写入 `docs/metrics.md` §2.5
 
+### 追加 · 无 Docker 端到端验证（D28 替代）
+
+- **产出**：`scripts/dev_stack.py` —— 一条命令起本地演示栈（SQLite + fakeredis + 进程内调度循环），自动建角色/演示账号/default 组/一台 8 卡 A100 节点，前端 `npm run dev` 连上即可双浏览器验收
+- **实测**：提交 `walltime_min=1` 作业 → 4s 内 `completed`、`gpu_minutes=2`、配额与槽位归零；另一客户端订阅 SSE，从提交到收到 `queued` 事件 **122.4ms**（目标 ≤2s）
+- **顺带修的 bug**：`initial_data._ensure_group` 访问 `group.members` 触发 async 懒加载 → `make seed` 在组已存在时直接 `MissingGreenlet` 崩溃。改为直接查/插 `user_groups` 关联表，命令幂等
+- **仍未闭环**：浏览器渲染层（需人工开两个窗口）、真实 PG/Redis 栈
+

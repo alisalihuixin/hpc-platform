@@ -114,7 +114,7 @@ hpc-platform/
 | 调度策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | `Literal` 校验，拼错启动即失败 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发调度 20 作业，恰好 10 个 running / 10 个 queued** | 条件 `UPDATE` + `rowcount` |
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
-| SSE 事件（后端） | 状态变更即推送 | **发布/订阅往返、用户过滤、四处状态变更均有单测** | 端到端 ≤2s 待 D28 浏览器实测 |
+| SSE 端到端 | ≤2s 刷新 | **提交 → 订阅端 122.4ms（HTTP 层）；浏览器渲染待人工复核** | `scripts/dev_stack.py`，无需 Docker |
 | 前端 SSE 刷新 | 收到事件即刷新 | **fetch 流式 + 401 刷新重连；列表 300ms 去抖** | 代码已接入，端到端待 D28 |
 | 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，16 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端样式收敛 | 无重复硬编码 | **11 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
@@ -386,6 +386,8 @@ make seed      # 创建演示账号
 10. 压测基线：`cd apps/api && python scripts/bench_queries.py`，与 `docs/metrics.md` 的 p95 对照
 
 ### 本地开发（不用 Docker）
+
+> **最省事的演示方式**：`cd apps/api && python scripts/dev_stack.py --reset` —— SQLite + fakeredis + 进程内调度循环，自动建演示账号与一台 8 卡节点；再 `cd apps/web && npm run dev` 即可用两个浏览器验收 SSE。
 
 推荐做法：**基础设施仍用 Docker，后端与前端在本机手动跑** —— 依赖版本与生产一致，前端又有热更新。
 

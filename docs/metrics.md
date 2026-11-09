@@ -31,6 +31,7 @@
 | 平台看板 | 数据与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
 | 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms** | SQLite，10 轮，见 §2.4 |
 | 登录接口延迟 | p95 < 200ms | **串行 p95 108.3ms / 并发 10 p95 319.0ms；吞吐 39 logins/s** | bcrypt 10 轮，见 §2.5 |
+| SSE 端到端（HTTP 层） | ≤2s | **122.4ms**（提交 → 订阅端收到事件） | `scripts/dev_stack.py`，见 §2.6 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
@@ -96,11 +97,19 @@
 - 默认 rounds 由 12 调为 10（OWASP 下限），单次登录 p95 从 350ms 降到 108ms，吞吐翻倍
 - 代价：哈希强度降低 4 倍；如需更强防护可把 `BCRYPT_ROUNDS` 调回 12，延迟同比翻倍
 
+### 2.6 无 Docker 端到端验证（D28 替代证据）
+
+命令：`cd apps/api && python scripts/dev_stack.py --reset`（SQLite + fakeredis + 进程内调度循环）
+
+- 提交 → 调度 → 完成：`walltime_min=1` 的作业 4s 内进入 `completed`，`gpu_minutes=2`（2 卡 × 1 分钟向上取整），配额与节点槽位归零
+- SSE 投递：订阅端（admin）在另一客户端提交后 **122.4ms** 收到 `queued` 事件（本机 HTTP 层，目标 ≤2s）
+- 说明：链路走的是真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis；浏览器渲染层仍需人工开两个窗口复核
+
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
 |---|---|---|
-| 双浏览器 SSE ≤2s 同步 | 待测 | Docker 未运行；本机 Redis 需认证，无法起完整栈 |
-| 测试覆盖率 | 待测 | 尚未接入 pytest-cov |
-| 前端浏览器 E2E | 待测 | 同上，需 PG/Redis/worker/web 全栈 |
+| 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms 已验证（§2.6）；浏览器渲染层待人工复核 |
+| 测试覆盖率 | 待测 | 本机 `.venv` 无 pip，`uv pip` 解析过慢，pytest-cov 未安装 |
+| 前端浏览器 E2E | 待测 | 需 `npm run dev` + 浏览器 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
