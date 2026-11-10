@@ -469,3 +469,10 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **发现并修复的 UX 缺陷**：侧栏为 `hidden md:flex`，窄视口（<768px）完全无导航且没有替代入口。已在 `AppShell` 的 header 下增加 `md:hidden` 的可横向滚动导航条，与侧栏共用同一份 `items` 与高亮逻辑
 - **未闭环**：双窗口同时对照（需人工）；管理页逐页点按
 
+### 追加 · 浏览器二轮复核（管理页）
+
+- `/admin/audit`：4 条真实留痕，表名/动作/变更摘要均正确（SQLite 无会话变量，`changed_by` 显示 `—`，符合设计）
+- `/dashboard`：四张指标卡正常；发现**趋势图柱子高度恒为 0px** —— 外层 `items-end` 让列按内容收缩，内部 `flex-1` 轨道被压成 0。修复为列 `h-full` + 柱体 `minHeight: 2`，实测 6 根柱均 2.75px、轨道 138px
+- **登录回跳**：复核时发现从深层链接（如 `/admin/audit`）被踢到登录页后，登录成功固定跳 `/dashboard`。已支持 `?next=`：`AppShell` 跳转时带上当前路径，登录页校验为站内路径后回跳
+- 服务端日志显示 `/admin/{groups,users,quotas,nodes}` 的列表请求均为 200，说明四个管理页可正常加载（未逐一操作表单）
+
