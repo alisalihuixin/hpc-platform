@@ -16,6 +16,13 @@ function messageFor(error: unknown): string {
   return '登录失败，请稍后重试';
 }
 
+/** Where to land after login: ``?next=`` wins when it is a same-origin path. */
+function nextPath(): string {
+  if (typeof window === 'undefined') return '/dashboard';
+  const next = new URLSearchParams(window.location.search).get('next');
+  return next && next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard';
+}
+
 export default function LoginPage() {
   const { login, status } = useAuth();
   const router = useRouter();
@@ -26,7 +33,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (status === 'authenticated') router.replace('/dashboard');
+    if (status === 'authenticated') router.replace(nextPath());
   }, [status, router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -35,7 +42,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(username.trim(), password);
-      router.replace('/dashboard');
+      router.replace(nextPath());
     } catch (err) {
       setError(messageFor(err));
     } finally {

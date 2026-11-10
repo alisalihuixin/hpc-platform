@@ -19,16 +19,17 @@ function TrendChart({ points }: { points: DashboardReport['trend'] }) {
   const max = Math.max(...points.map((point) => Number(point.gpu_hours)), 1);
 
   return (
-    <div className="flex h-44 items-end gap-3">
+    <div className="flex h-44 gap-3">
       {points.map((point) => {
         const value = Number(point.gpu_hours);
         return (
-          <div key={point.month} className="flex flex-1 flex-col items-center gap-1">
+          <div key={point.month} className="flex h-full flex-1 flex-col items-center gap-1">
             <span className="text-[10px] text-slate-400">{formatHours(value)}</span>
+            {/* The track must own real height, otherwise the % bar collapses. */}
             <div className="flex w-full flex-1 items-end">
               <div
                 className="w-full rounded-t bg-brand-500"
-                style={{ height: `${Math.max((value / max) * 100, 2)}%` }}
+                style={{ height: `${Math.max((value / max) * 100, 2)}%`, minHeight: 2 }}
                 title={`${point.month}: ${formatHours(value)} GPU·h`}
               />
             </div>

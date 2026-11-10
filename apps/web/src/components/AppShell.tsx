@@ -26,8 +26,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (status === 'anonymous') router.replace('/login');
-  }, [status, router]);
+    if (status === 'anonymous') {
+      // Remember the intended page so login can return there.
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+    }
+  }, [status, router, pathname]);
 
   if (status !== 'authenticated' || !user) {
     return (
