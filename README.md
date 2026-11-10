@@ -120,7 +120,7 @@ hpc-platform/
 | 前端样式收敛 | 无重复硬编码 | **11 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全返还 | **GPU/CPU/内存归零、不产生流水、重复取消 409** | D34 |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` 输出 |
+| 前端首屏 JS | — | **shared 87.1 kB；/jobs 98.5 kB；/dashboard 91.4 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0008，SQLite）** | 0007/0008 在非对应方言降级为 no-op |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |

@@ -34,7 +34,7 @@
 | 登录接口延迟 | p95 < 200ms | **串行 p95 108.3ms / 并发 10 p95 319.0ms；吞吐 39 logins/s** | bcrypt 10 轮，见 §2.5 |
 | SSE 端到端（HTTP 层） | ≤2s | **122.4ms**（提交 → 订阅端收到事件） | `scripts/dev_stack.py`，见 §2.6 |
 | 双标签页实时刷新 | ≤2s | **1.17s**（标签 A 提交 → 标签 B 出现新作业，未手动刷新） | 真实浏览器，见 §2.7 |
-| 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
+| 前端首屏 JS | — | **shared 87.1 kB；/jobs 98.5 kB；/dashboard 91.4 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
 ## 2. 关键证据
