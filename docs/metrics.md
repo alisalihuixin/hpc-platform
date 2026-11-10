@@ -26,13 +26,14 @@
 | 全链路回归 | 提交→调度→结束→计费一致 | **详情 `gpu_minutes=120` 与流水 `duration_min=60` 同源；配额与节点三计数器归零** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全部返还 | **GPU/CPU/内存均归零、无流水、重复取消 409** | 回归用例 2 |
 | 边界校验 | 越界一律 422 | **提交 8 类越界 + 查询 7 类非法参数逐项断言** | 回归用例 3/4 |
-| M3 验收 | 验收清单闭环 | **9 项中 8 项通过；D28 双浏览器 ≤2s 实测待环境** | 开发计划 D35 验收表 |
+| M3 验收 | 验收清单闭环 | **9/9 通过；D28 用两个真实标签页补测，刷新 1.17s** | 开发计划 D35 验收表 + §2.7 |
 | 月结报表 | 聚合口径与流水一致 | **2 月/1 月共 2 个 bucket，冲正折负后合计 `6.5000` 卡时；`job_count` 去重** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 数据与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
 | 读路径压测（1 万作业） | p95 < 200ms | **6/6 通过，最慢为看板 34.95ms** | SQLite，10 轮，见 §2.4 |
 | 登录接口延迟 | p95 < 200ms | **串行 p95 108.3ms / 并发 10 p95 319.0ms；吞吐 39 logins/s** | bcrypt 10 轮，见 §2.5 |
 | SSE 端到端（HTTP 层） | ≤2s | **122.4ms**（提交 → 订阅端收到事件） | `scripts/dev_stack.py`，见 §2.6 |
+| 双标签页实时刷新 | ≤2s | **1.17s**（标签 A 提交 → 标签 B 出现新作业，未手动刷新） | 真实浏览器，见 §2.7 |
 | 前端首屏 JS | — | **shared 87.2 kB；/jobs 99.4 kB；/dashboard 92.2 kB** | `next build` |
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0008）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 
@@ -107,13 +108,26 @@
 - **真实浏览器**（`npm run dev` + 浏览器自动化）：登录 admin 成功跳转 `/dashboard`，`/jobs` 渲染出 2 行作业（#1 已完成 / #2 失败）；服务端日志同时记录 `GET /api/v1/jobs/stream 200`，说明前端 SSE 订阅在浏览器里真实建立
 - **管理页复核**：`/admin/audit` 渲染 4 条真实留痕（`nodes×2`、`users`、`quotas`，变更摘要正确显示 `status: draining → online` 等）；`/dashboard` 看板四张指标卡正常，趋势图发现柱子高度 0px 的布局缺陷并修复（修复后 6 根柱均 2.75px、轨道 138px）
 - **表单交互**：`/admin/groups` 新建 team-alpha（配额 500、1 成员）→ 列表出现；`/admin/quotas` 改 GPU 上限 500→800 → 落库且刷新后保持；`/admin/users` 新建 bob（角色 user）→ 列表从 3 变 4 且刷新后仍在。三次操作在服务端日志中分别对应 `POST /groups 201`、`PATCH /quotas/2 200`、`POST /users 201`
-- 说明：链路走真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis；「双窗口同时对照」仍需人工，但两端各自已验证
+- 说明：链路走真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis
+
+### 2.7 双标签页实时刷新（D28 验收）
+
+第一次实测 **FAIL**：两个标签页都停在 `/jobs`，A 提交后 B 既不刷新、`/api/v1/jobs` 请求数也不变，但 B 的 `/api/v1/jobs/stream` 长连接一直在。为区分「后端没推」和「前端没收到」，写了对照探针 `_sse_proxy_probe.py`（已删除）：
+
+```
+direct:8000: head=45ms  event_after_submit=0ms
+via-next:3000: ReadTimeout（10s 内连响应头都没收到）
+```
+
+- **根因**：`npm run dev` 下 `/api/*` 走 `next.config.mjs` 的 rewrite，Next dev 代理会缓冲流式响应——SSE 帧停在代理里，浏览器收不到任何事件。线上由 Caddy 在请求到达 Next 之前转发 `/api`，所以该缺陷**只存在于 dev**。
+- **修复**：新增 `NEXT_PUBLIC_SSE_BASE_URL`，作业状态流单独用它拼地址；`.env.local` 指向 `http://localhost:8000`（后端 CORS 已含 `http://localhost:3000`），容器栈里留空即走同源。
+- **复测 PASS**：两个标签页均在 `/jobs`，A 在 `/jobs/new` 提交 `e2e-sse-20261110062353` → B **1.17s** 后列表出现该作业（状态「运行中」），B 全程未点刷新、控制台 0 error，网络面板可见 B 直连 `:8000/api/v1/jobs/stream` 的长连接。
 
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
 |---|---|---|
-| 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms + 浏览器内 `/jobs/stream` 已建立；双窗口同时对照待人工 |
+| 双浏览器 SSE ≤2s 同步 | 已实测 | 两个真实标签页 **1.17s**；dev 代理缓冲 SSE 的坑已修，见 §2.7 |
 | 前端浏览器 E2E | 部分实测 | 登录、`/jobs`、`/admin/audit`、`/dashboard` 已点按；建组/改配额/建用户三条表单链路已实测并落库 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
 

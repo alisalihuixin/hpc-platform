@@ -114,8 +114,8 @@ hpc-platform/
 | 调度策略切换 | 一行配置 | **`SCHEDULER_POLICY=fifo\|priority`** | `Literal` 校验，拼错启动即失败 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发调度 20 作业，恰好 10 个 running / 10 个 queued** | 条件 `UPDATE` + `rowcount` |
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
-| SSE 端到端 | ≤2s 刷新 | **提交 → 订阅端 122.4ms（HTTP 层）；浏览器内 `/jobs/stream` 连接已建立** | `scripts/dev_stack.py` + 浏览器实测 |
-| 前端 SSE 刷新 | 收到事件即刷新 | **fetch 流式 + 401 刷新重连；列表 300ms 去抖；浏览器内连接已建立** | 双窗口对照待人工 |
+| SSE 端到端 | ≤2s 刷新 | **提交 → 订阅端 122.4ms（HTTP 层）** | `scripts/dev_stack.py` |
+| 双标签实时刷新 | 另一标签免刷新 | **1.17s 出现新作业，0 console error；同时修掉 Next dev 代理缓冲 SSE 的坑** | 双标签页实测 |
 | 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，16 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端样式收敛 | 无重复硬编码 | **11 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
@@ -413,6 +413,8 @@ npm install
 Copy-Item .env.local.example .env.local
 npm run dev                      # :3000；/api/** 由 next.config.mjs 的 rewrite 转发到 :8000
 ```
+
+> **SSE 必须直连后端**：`npm run dev` 的 `/api` rewrite 会缓冲流式响应（实测 10s 内收不到任何事件），所以 `.env.local` 里的 `NEXT_PUBLIC_SSE_BASE_URL=http://localhost:8000` 让作业状态流绕过代理直连 API；后端 CORS 默认已允许 `http://localhost:3000`。容器栈里留空即可（Caddy 在 Next 之前转发 `/api`）。
 
 访问 <http://localhost:3000>（手动跑时**不需要** Caddy）；API 文档在 <http://localhost:8000/docs>。
 

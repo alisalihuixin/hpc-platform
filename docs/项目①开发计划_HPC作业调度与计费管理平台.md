@@ -284,12 +284,13 @@ D17 作业模型 ─────────────────────
 - **验证**：`npm run typecheck` / `lint` / `build` 全过（10 条路由，/jobs 首屏 98.7 kB）
 - **未验证**：双浏览器 ≤2s 端到端（需 PG/Redis/worker 起服务，归入 D28）
 
-### D28 · 双浏览器 SSE 验收 —— ⏳ 环境阻塞
+### D28 · 双浏览器 SSE 验收 —— 已完成（dev 代理坑已修）
 
-- **现状**：`/nodes` 页面已于 D25 交付；验收本身需要同时运行 API + Redis + ARQ worker + Web
-- **阻塞原因**：Docker Desktop 未运行；本机 `6379` 上的 Redis 需要认证，而仓库 `.env` 中是无密码 URL，无法直接用于 SSE Pub/Sub
-- **已就绪**：后端 SSE 单测（发布/订阅、过滤、四处状态变更）、前端流式订阅与重连、100 作业 demo 脚本
-- **待办**：环境恢复后开两个浏览器打开 `/jobs`，一边提交/取消，另一边核对 ≤2s 自动刷新并记录结果
+- **首次实测 FAIL**：两个标签页都在 `/jobs`，A 提交后 B 既不刷新、`/api/v1/jobs` 请求数也不变，但 B 的 `/api/v1/jobs/stream` 长连接始终存在 → 说明「连上了但收不到事件」，不是后端没推
+- **根因定位**：写对照探针 `_sse_proxy_probe.py`（已删除）分别直连 8000 与经 3000 代理订阅：`direct:8000 head=45ms / event_after_submit=0ms`，`via-next:3000` 10s 内连响应头都没收到。`npm run dev` 的 `/api/*` rewrite 会缓冲流式响应；线上 Caddy 在 Next 之前转发 `/api`，故**仅 dev 受影响**
+- **修复**：`NEXT_PUBLIC_SSE_BASE_URL` 单独给作业状态流用，`.env.local` 指向 `http://localhost:8000`（后端 CORS 已含 3000），容器栈留空走同源；`.env.local.example` 与 README 同步说明
+- **复测 PASS**：两标签页同时停在 `/jobs`，A 在 `/jobs/new` 提交 → B **1.17s** 出现该作业，B 全程未手动刷新、控制台 0 error、网络面板可见直连 `:8000` 的 stream 长连接
+- **遗留**：ARQ worker + 真 Redis 组合下的同一验证（当前用 `scripts/dev_stack.py` 的进程内调度循环替代，投递链路一致）
 
 ### D29 · 管理-节点页（F2.2）—— 已完成
 
@@ -377,7 +378,6 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 
 - PRD 口径偏差 3 项（`PUT` vs `PATCH`、`/healthz` vs `/health`、组排行仅 admin）；限流窗口已按 PRD 对齐为 300s
 - 限流并发压测未做（需 load 工具）
-- D28 双浏览器实测
 
 ### D36 · 月结物化视图（F6.1）—— 已完成
 
@@ -467,7 +467,7 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 
 - **浏览器验证 PASS**：`dev_stack` + `npm run dev` 下，真实浏览器登录 admin → 跳转 `/dashboard` → `/jobs` 渲染出 2 行作业（含名称/状态/资源/walltime），服务端日志记录 `GET /api/v1/jobs/stream 200`，证明 SSE 订阅在浏览器内建立
 - **发现并修复的 UX 缺陷**：侧栏为 `hidden md:flex`，窄视口（<768px）完全无导航且没有替代入口。已在 `AppShell` 的 header 下增加 `md:hidden` 的可横向滚动导航条，与侧栏共用同一份 `items` 与高亮逻辑
-- **未闭环**：双窗口同时对照（需人工）；管理页逐页点按
+- **未闭环**：管理页逐页点按（已于「浏览器二轮/三轮」补齐）
 
 ### 追加 · 浏览器二轮复核（管理页）
 
@@ -483,5 +483,11 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **建用户**：`/admin/users` 建 bob（角色 user）→ 提示「已创建用户 bob」，计数 3 → 4，刷新后仍在
 - **修复**：`quotas` 与 `nodes` 页补 `notice` 成功提示（与建组/建用户同款 `Alert tone="success"`），统一四个管理页的反馈口径
 - 服务端日志佐证：`POST /groups 201`、`PATCH /quotas/2 200`、`POST /users 201`
-- **仍未闭环**：双窗口同时对照（需人工）
+
+### 追加 · 浏览器四轮：双标签 SSE（D28 收口）
+
+- **先用探针分离故障层**：直连 8000 订阅，提交后事件 **0ms** 到达；经 3000 代理 10s 都收不到响应头 → 断定是 `npm run dev` 的 rewrite 缓冲了流式响应，而非后端或前端解析问题
+- **修复**：新增 `NEXT_PUBLIC_SSE_BASE_URL`（作业状态流专用地址），dev 下直连后端；容器栈留空，线上仍由 Caddy 同源转发
+- **复测 PASS**：两个标签页同时停在 `/jobs`，A 提交 `e2e-sse-20261110062353` → B **1.17s** 出现该作业（状态「运行中」），未手动刷新、0 console error
+- 至此 D28 验收项闭环：M3 验收表 9/9
 
