@@ -4,3 +4,6 @@ node_modules
 Dockerfile
 .dockerignore
 npm-debug.log*
+# Never bake the local-dev overrides (e.g. NEXT_PUBLIC_SSE_BASE_URL) into an image.
+.env.local
+.env*.local
