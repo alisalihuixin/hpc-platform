@@ -106,6 +106,7 @@
 - SSE 投递：订阅端（admin）在另一客户端提交后 **122.4ms** 收到 `queued` 事件（本机 HTTP 层，目标 ≤2s）
 - **真实浏览器**（`npm run dev` + 浏览器自动化）：登录 admin 成功跳转 `/dashboard`，`/jobs` 渲染出 2 行作业（#1 已完成 / #2 失败）；服务端日志同时记录 `GET /api/v1/jobs/stream 200`，说明前端 SSE 订阅在浏览器里真实建立
 - **管理页复核**：`/admin/audit` 渲染 4 条真实留痕（`nodes×2`、`users`、`quotas`，变更摘要正确显示 `status: draining → online` 等）；`/dashboard` 看板四张指标卡正常，趋势图发现柱子高度 0px 的布局缺陷并修复（修复后 6 根柱均 2.75px、轨道 138px）
+- **表单交互**：`/admin/groups` 新建 team-alpha（配额 500、1 成员）→ 列表出现；`/admin/quotas` 改 GPU 上限 500→800 → 落库且刷新后保持；`/admin/users` 新建 bob（角色 user）→ 列表从 3 变 4 且刷新后仍在。三次操作在服务端日志中分别对应 `POST /groups 201`、`PATCH /quotas/2 200`、`POST /users 201`
 - 说明：链路走真实 FastAPI + SSE 流 + 调度服务，只是把 PostgreSQL/Redis 换成了 SQLite/fakeredis；「双窗口同时对照」仍需人工，但两端各自已验证
 
 ## 3. 待测 / 未验证
@@ -113,7 +114,7 @@
 | 项 | 状态 | 原因 |
 |---|---|---|
 | 双浏览器 SSE ≤2s 同步 | 部分实测 | HTTP 层 122.4ms + 浏览器内 `/jobs/stream` 已建立；双窗口同时对照待人工 |
-| 前端浏览器 E2E | 部分实测 | 登录、`/jobs`、`/admin/audit`、`/dashboard` 已点按；表单提交类交互未逐项操作 |
+| 前端浏览器 E2E | 部分实测 | 登录、`/jobs`、`/admin/audit`、`/dashboard` 已点按；建组/改配额/建用户三条表单链路已实测并落库 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
 
 ### 3.1 覆盖率结构说明

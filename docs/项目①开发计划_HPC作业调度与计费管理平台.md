@@ -476,3 +476,12 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **登录回跳**：复核时发现从深层链接（如 `/admin/audit`）被踢到登录页后，登录成功固定跳 `/dashboard`。已支持 `?next=`：`AppShell` 跳转时带上当前路径，登录页校验为站内路径后回跳
 - 服务端日志显示 `/admin/{groups,users,quotas,nodes}` 的列表请求均为 200，说明四个管理页可正常加载（未逐一操作表单）
 
+### 追加 · 浏览器三轮：表单交互
+
+- **建组**：`/admin/groups` 建 team-alpha（GPU 上限 500、勾选 1 名成员）→ 成功提示「已创建资源组 team-alpha（配额 500 卡）」，刷新后仍在
+- **改配额**：`/admin/quotas` 把 team-alpha 从 500 改 800 → 行变 `0/800（余 800）`，刷新后保持；同时发现该页**保存后没有任何成功提示**（`groups`/`users` 有 `notice`，`quotas`/`nodes` 没有）
+- **建用户**：`/admin/users` 建 bob（角色 user）→ 提示「已创建用户 bob」，计数 3 → 4，刷新后仍在
+- **修复**：`quotas` 与 `nodes` 页补 `notice` 成功提示（与建组/建用户同款 `Alert tone="success"`），统一四个管理页的反馈口径
+- 服务端日志佐证：`POST /groups 201`、`PATCH /quotas/2 200`、`POST /users 201`
+- **仍未闭环**：双窗口同时对照（需人工）
+
