@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # ---- Login rate limit (sliding window) ----
     login_rate_limit_max_attempts: int = 5
-    login_rate_limit_window_seconds: int = 60
+    login_rate_limit_window_seconds: int = 300
 
     # ---- Scheduler (F4.3) ----
     # Poll interval for the worker's queued-job scan.

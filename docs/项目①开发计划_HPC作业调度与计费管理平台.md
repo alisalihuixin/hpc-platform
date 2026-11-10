@@ -375,8 +375,8 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 
 **遗留（不阻塞 M3 收口）**
 
-- PRD 口径偏差 4 项（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）
-- 登录 P95、限流并发压测未做（需 load 工具）
+- PRD 口径偏差 3 项（`PUT` vs `PATCH`、`/healthz` vs `/health`、组排行仅 admin）；限流窗口已按 PRD 对齐为 300s
+- 限流并发压测未做（需 load 工具）
 - D28 双浏览器实测
 
 ### D36 · 月结物化视图（F6.1）—— 已完成

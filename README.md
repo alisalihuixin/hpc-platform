@@ -263,7 +263,7 @@ hpc-platform/
 - 组管理页与报表：组管理已完成（D32），报表属 M4（D36–D37）。
 - M3 已收口（D35）：9 项验收 8 项通过，D28 双浏览器 ≤2s 实测因 Redis 环境阻塞仍待补测。
 - 浏览器端到端联调尚未执行（Docker 未运行、本机 Redis 需密码），环境恢复后按 D28 统一实测。
-- 与 PRD 的偏差（`PUT` vs `PATCH`、`/healthz` vs `/health`、限流窗口 5min vs 60s、组排行仅 admin）已登记在开发计划第 8 节，待统一口径。
+- 与 PRD 的偏差：`PUT` vs `PATCH`、`/healthz` vs `/health`、组排行仅 admin 已登记在开发计划第 8 节；**限流窗口已按 PRD 对齐为 5 分钟（300s）**
 
 ### M3 SSE + 管理页 —— ✅ 完成（D26–D27、D29–D35；D28 双浏览器实测待环境）
 
