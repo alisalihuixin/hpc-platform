@@ -18,6 +18,12 @@ export interface JobEvent {
 
 const RECONNECT_MS = 3000;
 
+// `next dev` buffers responses that go through the /api rewrite, so an SSE
+// stream would stay silent forever. In that setup the browser talks to the
+// backend directly; in the container stack the value is empty and Caddy
+// routes /api before the request reaches Next.js.
+const SSE_BASE = process.env.NEXT_PUBLIC_SSE_BASE_URL ?? apiBase;
+
 /** Subscribe to `job.updated`; returns an unsubscribe function. */
 export function subscribeJobEvents(onEvent: (event: JobEvent) => void): () => void {
   const controller = new AbortController();
@@ -39,7 +45,7 @@ export function subscribeJobEvents(onEvent: (event: JobEvent) => void): () => vo
     }
 
     try {
-      const response = await fetch(`${apiBase}${endpoints.jobsStream}`, {
+      const response = await fetch(`${SSE_BASE}${endpoints.jobsStream}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'text/event-stream' },
         signal: controller.signal,
       });
