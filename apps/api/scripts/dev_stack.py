@@ -87,9 +87,11 @@ async def main() -> None:
 
     import uvicorn
     from fakeredis import aioredis as fakeredis_aioredis
+    from sqlalchemy import text
 
     from app import initial_data
     from app.core.redis import get_redis
+    from app.db import audit_triggers
     from app.db.base import Base
     from app.db.session import async_session_factory, engine
     from app.main import app
@@ -98,6 +100,10 @@ async def main() -> None:
     async with engine.begin() as conn:
         # create_all is enough here; alembic owns the production schema.
         await conn.run_sync(Base.metadata.create_all)
+        # Audit triggers come from the migration - install them the same way so
+        # /admin/audit is not empty in the demo.
+        for statement in audit_triggers.sqlite_statements():
+            await conn.execute(text(statement))
 
     await _ensure_roles()
     await initial_data.main()
