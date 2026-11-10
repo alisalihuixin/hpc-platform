@@ -48,6 +48,7 @@ export default function AdminNodesPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -120,11 +121,14 @@ export default function AdminNodesPage() {
 
     setBusy(true);
     setFormError(null);
+    setNotice(null);
     try {
       if (editingId !== null) {
         await nodesApi.update(editingId, payload);
+        setNotice(`已更新节点 ${payload.hostname}`);
       } else {
         await nodesApi.create(payload);
+        setNotice(`已注册节点 ${payload.hostname}`);
       }
       resetForm();
       await load();
@@ -179,6 +183,7 @@ export default function AdminNodesPage() {
       </header>
 
       {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       <form
         onSubmit={(event) => void submit(event)}

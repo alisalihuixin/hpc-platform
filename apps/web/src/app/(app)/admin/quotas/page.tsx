@@ -36,6 +36,7 @@ export default function AdminQuotasPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -98,12 +99,16 @@ export default function AdminQuotasPage() {
 
     setBusy(true);
     setFormError(null);
+    setNotice(null);
     try {
       await quotasApi.update(editing.group_id, {
         gpu_limit: gpuLimit,
         max_nodes_per_job: maxNodes,
         max_gpus_per_job: maxGpus,
       });
+      setNotice(
+        `已更新 ${editing.group_name ?? `group #${editing.group_id}`} 的配额（GPU 上限 ${gpuLimit}）`,
+      );
       resetForm();
       await load();
     } catch (err) {
@@ -123,6 +128,7 @@ export default function AdminQuotasPage() {
       </header>
 
       {error ? <Alert>{error}</Alert> : null}
+      {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       {editing ? (
         <form
