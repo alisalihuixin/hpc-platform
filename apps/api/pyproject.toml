@@ -54,3 +54,10 @@ ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+# SQLAlchemy's async ORM hands work to the sync driver through greenlets.
+# Without this the tracer loses every line after a coroutine's first DB await,
+# which made service modules look far less tested than they are (node_service
+# 37% -> 92% on the same tests).
+concurrency = ["greenlet", "thread"]

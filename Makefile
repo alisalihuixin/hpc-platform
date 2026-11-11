@@ -46,8 +46,8 @@ api-shell: ## Shell into the api container
 test: ## Run backend tests
 	cd apps/api && pytest -q
 
-cov: ## Run backend tests with coverage (fails under 80%)
-	cd apps/api && pytest -q --cov=app --cov-report=term --cov-fail-under=80
+cov: ## Run backend tests with coverage (fails under 88%)
+	cd apps/api && pytest -q --cov=app --cov-report=term --cov-fail-under=88
 
 lint: ## Ruff check + format check
 	cd apps/api && ruff check . && ruff format --check .

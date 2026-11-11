@@ -36,8 +36,8 @@ jobs:
       - name: Ruff format check
         run: ruff format --check .
 
-      - name: Pytest (coverage gate 80%)
-        run: pytest -q --cov=app --cov-report=term --cov-fail-under=80
+      - name: Pytest (coverage gate 88%)
+        run: pytest -q --cov=app --cov-report=term --cov-fail-under=88
 
   web:
     name: Web (lint + build)
