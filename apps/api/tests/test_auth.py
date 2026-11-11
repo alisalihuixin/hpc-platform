@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
+
+import jwt
 from httpx import AsyncClient
 
+from app.core.config import settings
 from tests.conftest import (
     ADMIN_EMAIL,
     ADMIN_PASSWORD,
@@ -13,6 +18,18 @@ from tests.conftest import (
     USER_PASSWORD,
     auth_headers,
 )
+
+
+def _encode(claims: dict) -> str:
+    """Sign an arbitrary claim set with the app's key so we can probe validation."""
+    return jwt.encode(claims, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def _claims(**overrides) -> dict:
+    now = int(datetime.now(UTC).timestamp())
+    base = {"sub": "1", "type": "access", "jti": uuid.uuid4().hex, "iat": now, "exp": now + 300}
+    base.update(overrides)
+    return {key: value for key, value in base.items() if value is not None}
 
 
 async def test_login_with_email_returns_token_pair(client: AsyncClient, seeded) -> None:
@@ -126,3 +143,55 @@ async def test_refresh_rejects_access_token(client: AsyncClient, seeded) -> None
 
     response = await client.post(f"{API}/auth/refresh", json={"refresh_token": access_token})
     assert response.status_code == 401
+
+
+async def test_expired_access_token_is_401(client: AsyncClient, seeded) -> None:
+    expired = _claims(exp=int((datetime.now(UTC) - timedelta(seconds=30)).timestamp()))
+
+    response = await client.get(
+        f"{API}/auth/me", headers={"Authorization": f"Bearer {_encode(expired)}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Token has expired"
+
+
+async def test_refresh_token_cannot_be_used_as_access_token(client: AsyncClient, seeded) -> None:
+    login = await client.post(
+        f"{API}/auth/login", json={"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
+    )
+    refresh_token = login.json()["refresh_token"]
+
+    response = await client.get(
+        f"{API}/auth/me", headers={"Authorization": f"Bearer {refresh_token}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid token type"
+
+
+async def test_token_without_subject_is_rejected(client: AsyncClient, seeded) -> None:
+    response = await client.get(
+        f"{API}/auth/me", headers={"Authorization": f"Bearer {_encode(_claims(sub=None))}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Malformed token"
+
+
+async def test_non_numeric_subject_is_rejected(client: AsyncClient, seeded) -> None:
+    response = await client.get(
+        f"{API}/auth/me", headers={"Authorization": f"Bearer {_encode(_claims(sub='abc'))}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Malformed token subject"
+
+
+async def test_token_for_deleted_user_is_rejected(client: AsyncClient, seeded) -> None:
+    response = await client.get(
+        f"{API}/auth/me", headers={"Authorization": f"Bearer {_encode(_claims(sub='999999'))}"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "User no longer exists"
