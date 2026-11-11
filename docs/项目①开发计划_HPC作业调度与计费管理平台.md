@@ -462,7 +462,8 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - 安装 `pytest-cov` 并写入 dev 依赖；`make cov` 低于门槛直接失败
 - 首版门槛 `--cov-fail-under=80`，实测 80.09%，长期贴着阈值线
 - **追加修正**：排查「服务层为何只有 41%」时发现是测量失真——SQLAlchemy 异步经 greenlet 交还同步驱动，默认 tracer 在协程第一个 DB `await` 之后不再记录；同一批用例加 `--concurrency=greenlet` 后 `node_service` 37% → 92%
-- 已在 `pyproject.toml` 固化 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，真实覆盖率为 **89.86%**（1924 语句 / 195 未覆盖），门槛同步提到 **88%**（CI 与 Makefile）
+- 已在 `pyproject.toml` 固化 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，门槛同步提到 **88%**（CI 与 Makefile）
+- 修正后真实覆盖率 **90.18%**（1924 语句 / 189 未覆盖），另补 5 条 token 校验用例覆盖 `deps/auth.py` 的全部 401 分支
 - 修正后核心服务 92%–100%（`job_service` 100%）；0% 仍是 `initial_data.py`、`workers/*` 等胶水代码，剩余缺口集中在 404/冲突/非法入参等防御分支
 
 ### 追加 · 浏览器实测与移动端导航修复
