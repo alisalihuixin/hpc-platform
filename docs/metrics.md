@@ -9,7 +9,7 @@
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
 | 单元测试 | 全绿 | **168 passed**（≈20.9s） | SQLite + fakeredis，无需外部依赖 |
-| 测试覆盖率 | ≥ 80% | **80.09%**（1924 语句 / 383 未覆盖） | `make cov`（`--cov-fail-under=80`） |
+| 测试覆盖率 | ≥ 88% | **89.9%**（1924 语句 / 195 未覆盖） | `make cov`（`--cov-fail-under=88`） |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -131,8 +131,10 @@ via-next:3000: ReadTimeout（10s 内连响应头都没收到）
 | 前端浏览器 E2E | 部分实测 | 登录、`/jobs`、`/admin/audit`、`/dashboard` 已点按；建组/改配额/建用户三条表单链路已实测并落库 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |
 
-### 3.1 覆盖率结构说明
+### 3.1 覆盖率结构说明（含一次测量修正）
 
-- 核心业务（`billing_service` / `scheduling_policy` / 全部 `models` / `schemas`）为 96%–100%
-- 0% 的两处是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
-- 偏低：`node_service` 41%、`user_service` 49%、`group_service` 49%——多为 404/冲突分支，已被对应路由用例间接覆盖主路径，剩余是防御性分支
+- **修正前的数字是错的**：`--cov-fail-under=80` 长期贴着 80.09% 这条线，排查「服务层为什么只有 41%」时发现 SQLAlchemy 异步会把工作交给同步驱动（greenlet 切换），默认 tracer 在协程第一个 DB `await` 之后不再记录任何行 —— `node_service` 同一批用例，加 `--concurrency=greenlet` 后从 37% 跳到 **92%**
+- 已在 `pyproject.toml` 写入 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，门槛随真实水平提到 **88%**
+- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），总计 **89.9%**
+- 0% 的两处仍是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
+- 剩余未覆盖主要是防御性分支（404 / 冲突 / 非法入参），主路径均由对应路由用例覆盖
