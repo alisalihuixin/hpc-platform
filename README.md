@@ -524,3 +524,12 @@ cd apps/api
 ```
 
 CI（`.github/workflows/ci.yml`）：后端 `ruff check` + `ruff format --check` + `pytest`；前端 `next lint` + `next build`；另校验 `docker compose config`。
+
+---
+
+## 9. 后续：项目②
+
+同一 monorepo 内继续开发「集群故障诊断 Agent」（LangGraph + 并行多案 + 复核回流），复用本项目 JWT / SSE / 前端组件。
+
+- 需求：[项目②需求文档](docs/项目②需求文档_集群故障诊断Agent.md)
+- 计划：[项目②开发计划](docs/项目②开发计划_集群故障诊断Agent.md)（D41–D65）
