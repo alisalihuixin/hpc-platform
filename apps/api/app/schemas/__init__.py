@@ -1,4 +1,11 @@
 from app.schemas.common import Message
+from app.schemas.diagnosis import (
+    AlertCreate,
+    AlertRead,
+    DiagnosisCreate,
+    DiagnosisRead,
+    DiagnosisStepRead,
+)
 from app.schemas.job import JobCreate, JobDetail, JobList, JobRead
 from app.schemas.node import NodeCreate, NodeList, NodeRead, NodeUpdate
 from app.schemas.quota import QuotaList, QuotaRead, QuotaUpdate
@@ -33,6 +40,11 @@ __all__ = [
     "JobDetail",
     "JobList",
     "JobRead",
+    "AlertCreate",
+    "AlertRead",
+    "DiagnosisCreate",
+    "DiagnosisRead",
+    "DiagnosisStepRead",
     "GroupUsageRanking",
     "UsageEventRead",
     "UserUsage",

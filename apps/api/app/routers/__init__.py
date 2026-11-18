@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.routers import (
     audit_logs,
     auth,
+    diagnosis,
     groups,
     health,
     jobs,
@@ -25,6 +26,7 @@ api_router.include_router(jobs.router)
 api_router.include_router(usage.router)
 api_router.include_router(reports.router)
 api_router.include_router(audit_logs.router)
+api_router.include_router(diagnosis.router)
 
 health_router = health.router
 
