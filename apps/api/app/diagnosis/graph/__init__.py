@@ -8,6 +8,9 @@ decreasing token budget.
 from __future__ import annotations
 
 from app.diagnosis.graph.graph import (
+    GRAPH_RECURSION_LIMIT,
+    MAX_ITERATIONS,
+    MAX_REFLECTIONS,
     REFLECT_PROMPT,
     REPORT_PROMPT,
     SYSTEM_PROMPT,
@@ -22,11 +25,20 @@ from app.diagnosis.graph.graph import (
     invoke_tool,
     route_after_plan,
     route_after_reflect,
+    route_after_report,
     run_diagnosis,
 )
-from app.diagnosis.graph.report import Report, ReportError, validate_report
+from app.diagnosis.graph.report import (
+    Report,
+    ReportError,
+    build_fallback_report,
+    validate_report,
+)
 
 __all__ = [
+    "GRAPH_RECURSION_LIMIT",
+    "MAX_ITERATIONS",
+    "MAX_REFLECTIONS",
     "REFLECT_PROMPT",
     "REPORT_PROMPT",
     "SYSTEM_PROMPT",
@@ -40,9 +52,11 @@ __all__ = [
     "Report",
     "ReportError",
     "build_diagnosis_graph",
+    "build_fallback_report",
     "invoke_tool",
     "route_after_plan",
     "route_after_reflect",
+    "route_after_report",
     "run_diagnosis",
     "validate_report",
 ]

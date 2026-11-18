@@ -1,4 +1,4 @@
-"""Single-case diagnosis graph (D51/D52).
+"""Single-case diagnosis graph (D51-D53).
 
 The investigation loop is:
 
@@ -10,11 +10,17 @@ registry.  ``observe`` turns the structured result into an evidence entry with a
 stable ``evidence_id`` and feeds a compact transcript back to the model.
 
 Once the model says "done", ``reflect`` self-checks the chain: if evidence is
-still missing it routes back to ``plan`` (the loop guardrails land in D53),
-otherwise ``report`` writes the only artefact that may carry a root cause.  The
-report validator rejects conclusions that cite no evidence or an id that does
-not exist, so a hallucinated citation fails the run instead of reaching an
-operator.
+still missing it routes back to ``plan``, otherwise ``report`` writes the only
+artefact that may carry a root cause.  The report validator rejects conclusions
+that cite no evidence or an id that does not exist, so a hallucinated citation
+fails the run instead of reaching an operator.
+
+D53 adds the four hard guardrails that stop a confused agent from looping or
+burning money: at most ``MAX_ITERATIONS`` tool calls, a LangGraph super-step
+ceiling, tool+argument de-duplication, and the token ledger.  Any of them
+diverts the run to ``fallback``, which writes a rule-generated report citing the
+evidence collected so far; a run with no evidence at all stays ``degraded``
+without a report.
 
 Everything the nodes need - DB session, tool table, LLM client, token budget -
 is injected through :func:`build_diagnosis_graph`, so a test can compile the
@@ -32,7 +38,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.llm import ChatModel, LLMError, LLMResponse, Message, get_llm_client
 from app.diagnosis.budget import TokenBudget
-from app.diagnosis.graph.report import Report, ReportError, validate_report
+from app.diagnosis.graph.report import (
+    Report,
+    ReportError,
+    build_fallback_report,
+    validate_report,
+)
 from app.diagnosis.tools import TOOLS, ToolErrorCode, ToolResponse
 from app.models.diagnosis import RunStatus
 
@@ -78,6 +89,9 @@ class DiagnosticState(TypedDict, total=False):
     pending_result: dict[str, Any]
     evidence: list[Evidence]
     iterations: int
+    #: How many times ``reflect`` ran; capped so "done + insufficient" cannot
+    #: ping-pong forever without executing a tool.
+    reflections: int
     budget: dict[str, int | bool]
     reflection: Reflection
     #: Serialised :class:`app.diagnosis.graph.report.Report`.
@@ -141,10 +155,17 @@ REPORT_PROMPT = """证据收集完成，请写出最终诊断报告。
   "reasoning": "<证据如何推出结论>"}}
 evidence_refs 不能为空，且只能使用上面列出的 id。"""
 
-#: Once one of these is written no node may continue the loop.
-_TERMINAL_STATUSES = frozenset(
-    {RunStatus.SUCCEEDED.value, RunStatus.DEGRADED.value, RunStatus.FAILED.value}
-)
+#: Hard cap on executed tool calls per run (D53).  Six is the product decision:
+#: enough for the deepest trap case, small enough to bound cost and latency.
+MAX_ITERATIONS = 6
+
+#: How many self-checks may ask for more evidence before the run degrades.
+MAX_REFLECTIONS = 2
+
+#: LangGraph super-step ceiling.  One tool round costs three super-steps
+#: (plan, call_tool, observe), so the cap above needs 3x plus room for the
+#: reflect/report/fallback hops.
+GRAPH_RECURSION_LIMIT = MAX_ITERATIONS * 3 + 8
 
 
 def build_diagnosis_graph(
@@ -160,8 +181,14 @@ def build_diagnosis_graph(
     ledger = budget if budget is not None else TokenBudget()
 
     async def plan(state: DiagnosticState) -> dict[str, Any]:
-        # A degraded run must not spend another request; D53 writes the
-        # rule-based conclusion, D51 only stops cleanly.
+        # Guardrail 1: the iteration cap is checked before spending a request.
+        if state.get("iterations", 0) >= MAX_ITERATIONS:
+            return {
+                "status": RunStatus.DEGRADED.value,
+                "plan": _done("iteration cap reached"),
+                "budget": ledger.as_dict(),
+            }
+        # Guardrail 2: a degraded run must not spend another request.
         if ledger.degraded:
             return {
                 "status": RunStatus.DEGRADED.value,
@@ -187,6 +214,22 @@ def build_diagnosis_graph(
                 "status": RunStatus.FAILED.value,
                 "error": f"plan: {exc}",
                 "plan": _done("invalid plan"),
+                "budget": ledger.as_dict(),
+            }
+
+        # Guardrail 3: the same tool with the same arguments is never executed
+        # twice.  Repeating it means the model is stuck, so degrade now instead
+        # of paying for a loop.
+        if not decision["done"] and _signature(decision["tool"], decision["args"]) in {
+            _signature(entry["tool"], entry["args"]) for entry in state.get("evidence", [])
+        }:
+            return {
+                "status": RunStatus.DEGRADED.value,
+                "plan": _done("duplicate tool call"),
+                "messages": [
+                    *state["messages"],
+                    {"role": "assistant", "content": response.content},
+                ],
                 "budget": ledger.as_dict(),
             }
 
@@ -247,8 +290,17 @@ def build_diagnosis_graph(
         }
 
     async def reflect(state: DiagnosticState) -> dict[str, Any]:
+        rounds = state.get("reflections", 0)
+        # Guardrail 4: "done" + "insufficient" can ping-pong without ever
+        # calling a tool, so reflections get their own small cap.
+        if rounds >= MAX_REFLECTIONS:
+            return {
+                "reflection": {"sufficient": False, "reason": "reflection cap reached"},
+                "status": RunStatus.DEGRADED.value,
+                "budget": ledger.as_dict(),
+            }
         # No evidence means nothing to conclude, and asking the model would
-        # only burn tokens: nudge it to collect first (D53 caps the loop).
+        # only burn tokens: nudge it to collect first; ``plan`` owns the cap.
         if not state.get("evidence"):
             return {
                 "reflection": {"sufficient": False, "reason": "尚无任何工具证据"},
@@ -259,6 +311,7 @@ def build_diagnosis_graph(
                         "content": "当前没有任何工具证据，请先调用工具，不要直接下结论。",
                     },
                 ],
+                "reflections": rounds + 1,
                 "status": RunStatus.RUNNING.value,
             }
         if ledger.degraded:
@@ -296,12 +349,13 @@ def build_diagnosis_graph(
                 *state["messages"],
                 {"role": "assistant", "content": response.content},
             ],
+            "reflections": rounds + 1,
             "budget": ledger.as_dict(),
         }
 
     async def report(state: DiagnosticState) -> dict[str, Any]:
         evidence_ids = [entry["evidence_id"] for entry in state.get("evidence", [])]
-        # Degraded runs stop here; D53 writes the rule-based fallback report.
+        # Degraded runs stop before the LLM; ``fallback`` writes the rule report.
         if ledger.degraded:
             return {
                 "status": RunStatus.DEGRADED.value,
@@ -341,43 +395,78 @@ def build_diagnosis_graph(
             "budget": ledger.as_dict(),
         }
 
+    async def fallback(state: DiagnosticState) -> dict[str, Any]:
+        # Rule-only exit: no LLM call, so it works offline and cannot overspend.
+        try:
+            report = build_fallback_report(state.get("evidence", []))
+        except ReportError as exc:
+            return {
+                "status": RunStatus.DEGRADED.value,
+                "error": f"fallback: {exc}",
+                "budget": ledger.as_dict(),
+            }
+        return {
+            "report": report.model_dump(),
+            "status": RunStatus.DEGRADED.value,
+            "budget": ledger.as_dict(),
+        }
+
     graph = StateGraph(DiagnosticState)
     graph.add_node("plan", plan)
     graph.add_node("call_tool", call_tool)
     graph.add_node("observe", observe)
     graph.add_node("reflect", reflect)
     graph.add_node("report", report)
+    graph.add_node("fallback", fallback)
     graph.add_edge(START, "plan")
     graph.add_conditional_edges(
         "plan",
         route_after_plan,
-        {"call_tool": "call_tool", "reflect": "reflect", "end": END},
+        {"call_tool": "call_tool", "reflect": "reflect", "fallback": "fallback", "end": END},
     )
     graph.add_edge("call_tool", "observe")
     graph.add_edge("observe", "plan")
     graph.add_conditional_edges(
         "reflect",
         route_after_reflect,
-        {"plan": "plan", "report": "report", "end": END},
+        {"plan": "plan", "report": "report", "fallback": "fallback", "end": END},
     )
-    graph.add_edge("report", END)
+    graph.add_conditional_edges(
+        "report",
+        route_after_report,
+        {"fallback": "fallback", "end": END},
+    )
+    graph.add_edge("fallback", END)
     return graph.compile()
 
 
-def route_after_plan(state: DiagnosticState) -> Literal["call_tool", "reflect", "end"]:
+def route_after_plan(
+    state: DiagnosticState,
+) -> Literal["call_tool", "reflect", "fallback", "end"]:
     """A live tool request loops; "done" goes to self-check; failures stop."""
-    if state.get("status") in _TERMINAL_STATUSES:
+    status = state.get("status")
+    if status == RunStatus.FAILED.value:
         return "end"
+    if status == RunStatus.DEGRADED.value:
+        return "fallback"
     if state.get("pending_tool"):
         return "call_tool"
     return "reflect" if state.get("plan", {}).get("done") else "end"
 
 
-def route_after_reflect(state: DiagnosticState) -> Literal["plan", "report", "end"]:
+def route_after_reflect(state: DiagnosticState) -> Literal["plan", "report", "fallback", "end"]:
     """Missing evidence loops back; a satisfied self-check goes to the report."""
-    if state.get("status") in _TERMINAL_STATUSES:
+    status = state.get("status")
+    if status == RunStatus.FAILED.value:
         return "end"
+    if status == RunStatus.DEGRADED.value:
+        return "fallback"
     return "report" if state.get("reflection", {}).get("sufficient") else "plan"
+
+
+def route_after_report(state: DiagnosticState) -> Literal["fallback", "end"]:
+    """Only a degraded report needs the rule-based fallback."""
+    return "fallback" if state.get("status") == RunStatus.DEGRADED.value else "end"
 
 
 async def invoke_tool(
@@ -431,7 +520,8 @@ async def run_diagnosis(
         "iterations": 0,
         "status": RunStatus.RUNNING.value,
     }
-    return await graph.ainvoke(initial)
+    # Belt and braces: even a graph bug cannot exceed the super-step ceiling.
+    return await graph.ainvoke(initial, config={"recursion_limit": GRAPH_RECURSION_LIMIT})
 
 
 def _catalogue() -> str:
@@ -449,6 +539,11 @@ def _briefing(alert: AlertContext) -> str:
 
 def _done(reason: str) -> PlanDecision:
     return {"tool": "", "args": {}, "reason": reason, "done": True}
+
+
+def _signature(tool: str, args: dict[str, Any]) -> str:
+    """Stable identity for a tool+args pair, used by the duplicate guard."""
+    return f"{tool}:{json.dumps(args, sort_keys=True, ensure_ascii=False, default=str)}"
 
 
 def _parse_plan(payload: dict[str, Any], tools: dict[str, Any]) -> PlanDecision:
@@ -478,6 +573,9 @@ def _parse_reflection(payload: dict[str, Any]) -> Reflection:
 
 
 __all__ = [
+    "GRAPH_RECURSION_LIMIT",
+    "MAX_ITERATIONS",
+    "MAX_REFLECTIONS",
     "DiagnosticState",
     "Evidence",
     "PlanDecision",
@@ -491,9 +589,11 @@ __all__ = [
     "SYSTEM_PROMPT",
     "TOOL_CATALOGUE",
     "build_diagnosis_graph",
+    "build_fallback_report",
     "invoke_tool",
     "route_after_plan",
     "route_after_reflect",
+    "route_after_report",
     "run_diagnosis",
     "validate_report",
 ]

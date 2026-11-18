@@ -20,6 +20,7 @@ from app.diagnosis.data.mock import seed_diagnosis_data
 from app.diagnosis.data.runbooks import seed_runbooks
 from app.diagnosis.data.scripts import seed_fault_scripts
 from app.diagnosis.graph import (
+    MAX_ITERATIONS,
     PlanError,
     ReportError,
     build_diagnosis_graph,
@@ -310,10 +311,11 @@ async def test_reflect_degrades_when_budget_is_crossed_mid_run(session_factory) 
         state = await run_diagnosis(db, ALERT, llm=llm, budget=TokenBudget(limit=20))
 
     # Two 15-token plans cross the 20-token ceiling; reflect must not spend a
-    # third request and hands the run to the D53 fallback report.
+    # third request and hands the run to the rule-based fallback report.
     assert len(llm.calls) == 2
     assert state["status"] == "degraded"
-    assert "report" not in state
+    assert state["report"]["evidence_refs"] == ["E01"]
+    assert state["report"]["confidence"] == 0.0
     assert state["budget"] == {"limit": 20, "used": 30, "remaining": 0, "degraded": True}
 
 
@@ -351,6 +353,85 @@ async def test_report_stops_when_the_self_check_used_the_last_tokens(session_fac
 
     assert len(llm.calls) == 3
     assert state["status"] == "degraded"
+    assert state["report"]["evidence_refs"] == ["E01"]
+    assert state["report"]["confidence"] == 0.0
+
+
+async def test_duplicate_tool_call_is_short_circuited(session_factory) -> None:
+    await _seeded(session_factory)
+    # The model asks for the exact same lookup twice: guardrail 3 must not
+    # execute it again, and the run ends with a rule-based report.
+    llm = FakeLLM(TOOL_STEP, TOOL_STEP)
+
+    async with session_factory() as db:
+        graph = build_diagnosis_graph(db=db, llm=llm)
+        order: list[str] = []
+        state: dict[str, Any] = _initial_state()
+        async for update in graph.astream(_initial_state(), stream_mode="updates"):
+            for node, changes in update.items():
+                order.append(node)
+                state.update(changes)
+
+    assert order == ["plan", "call_tool", "observe", "plan", "fallback"]
+    assert len(llm.calls) == 2
+    assert state["status"] == "degraded"
+    assert state["report"]["evidence_refs"] == ["E01"]
+
+
+async def test_iteration_cap_stops_a_restless_agent(session_factory) -> None:
+    await _seeded(session_factory)
+    # Seven distinct lookups: de-duplication cannot help, only the cap can.
+    llm = FakeLLM(
+        *[
+            {"tool": "get_metrics", "args": {"window": 10 * step}, "reason": "再看一次"}
+            for step in range(1, 8)
+        ]
+    )
+
+    async with session_factory() as db:
+        state = await run_diagnosis(db, ALERT, llm=llm)
+
+    assert len(llm.calls) == MAX_ITERATIONS
+    assert state["iterations"] == MAX_ITERATIONS
+    assert [entry["evidence_id"] for entry in state["evidence"]] == [
+        "E01",
+        "E02",
+        "E03",
+        "E04",
+        "E05",
+        "E06",
+    ]
+    assert state["status"] == "degraded"
+    assert state["report"]["evidence_refs"][-1] == "E06"
+    assert "护栏" in state["report"]["reasoning"]
+
+
+async def test_reflect_loop_without_evidence_is_capped(session_factory) -> None:
+    await _seeded(session_factory)
+    # The model keeps answering "done" without touching a tool.  The reflection
+    # cap must stop the ping-pong long before LangGraph's recursion limit.
+    llm = FakeLLM(DONE_STEP, DONE_STEP, DONE_STEP)
+
+    async with session_factory() as db:
+        state = await run_diagnosis(db, ALERT, llm=llm)
+
+    assert len(llm.calls) == 3
+    assert state["status"] == "degraded"
+    assert state["error"].startswith("fallback:")
+    assert "report" not in state
+
+
+async def test_fallback_without_any_evidence_stays_degraded_without_report(session_factory) -> None:
+    await _seeded(session_factory)
+    # "Done" with no tool call and a budget already crossed: there is nothing
+    # to cite, so the rule engine refuses to fabricate a report.
+    llm = FakeLLM(DONE_STEP)
+
+    async with session_factory() as db:
+        state = await run_diagnosis(db, ALERT, llm=llm, budget=TokenBudget(limit=10))
+
+    assert state["status"] == "degraded"
+    assert state["error"] == "fallback: cannot build a fallback report without evidence"
     assert "report" not in state
 
 
@@ -421,6 +502,9 @@ async def test_exhausted_budget_stops_before_the_next_request(session_factory) -
     assert state["status"] == "degraded"
     assert state["budget"]["degraded"] is True
     assert len(state["evidence"]) == 1
+    # D53: the degraded exit still yields a rule-based report over the chain.
+    assert state["report"]["evidence_refs"] == ["E01"]
+    assert state["report"]["confidence"] == 0.0
 
 
 async def test_invoke_tool_rejects_unknown_names_and_missing_args(session_factory) -> None:
