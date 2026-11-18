@@ -21,6 +21,8 @@ dependencies = [
     # Project 2 - cluster fault-diagnosis agent.
     "langgraph>=1.0,<2.0",
     "langfuse>=2.50",
+    # DeepSeek chat/reasoner client (app/core/llm.py).
+    "httpx>=0.28",
     # Seeded mock fleet / fault scripts; runtime dependency because the
     # `seed-diagnosis` command imports it.
     "faker>=30.0",
@@ -31,7 +33,6 @@ dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
-    "httpx>=0.28",
     "aiosqlite>=0.20",
     "fakeredis[lua]>=2.26",
     "ruff>=0.8",

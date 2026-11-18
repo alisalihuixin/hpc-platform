@@ -8,8 +8,8 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **203 passed**（≈46s） | SQLite + fakeredis，无需外部依赖 |
-| 测试覆盖率 | ≥ 88% | **92.3%**（2474 语句 / 191 未覆盖） | `make cov`（`--cov-fail-under=88`） |
+| 单元测试 | 全绿 | **211 passed**（≈68s） | SQLite + fakeredis，无需外部依赖 |
+| 测试覆盖率 | ≥ 88% | **92.5%**（2611 语句 / 196 未覆盖） | `make cov`（`--cov-fail-under=88`） |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -42,6 +42,7 @@
 | 诊断工具前三个（D44） | 正常/不存在/超时三态返回 | **6 条用例：在线/离线节点、ECC 卡状态、日志截断（limit=3）、`not_found`、`invalid_args`、`timeout=0.01s` 截断** | `tests/test_diagnosis_tools.py`；`tools/base.py` 与 `logs.py` 覆盖 100%，`node.py` 94% |
 | 工具注册表与 runbook（D45） | 只读工具可选、写操作不可选 | **`TOOLS` 恰为 5 个只读工具；`execute_fix` 不在表中且只返回 `requires_approval` 提案；8 本 runbook 按标签（多 token AND）与全文检索，seed 幂等** | `tests/test_diagnosis_tools_registry.py`；新增 4 个工具模块覆盖 100% |
 | 剧本证据链回归（D46） | 20 剧本证据 100% 可取 | **20/20 剧本通过、56/56 次工具调用返回 ok；runbook 证据 3/3 命中；4 个多节点剧本的 5 节点同属一个交换机/机架** | `tests/test_diagnosis_evidence.py` |
+| LLM 调用层（D47） | 正常/重试/熔断三类 | **8 条用例：JSON Mode、chat↔reasoner 切换、503 两次后第 3 次成功、3 次重试耗尽、401 不重试、传输超时重传、6 次请求后熔断短路、冷却后半开恢复** | `tests/test_llm.py`；`core/llm.py` 覆盖 96% |
 
 ## 2. 关键证据
 
@@ -141,7 +142,7 @@ via-next:3000: ReadTimeout（10s 内连响应头都没收到）
 
 - **修正前的数字是错的**：`--cov-fail-under=80` 长期贴着 80.09% 这条线，排查「服务层为什么只有 41%」时发现 SQLAlchemy 异步会把工作交给同步驱动（greenlet 切换），默认 tracer 在协程第一个 DB `await` 之后不再记录任何行 —— `node_service` 同一批用例，加 `--concurrency=greenlet` 后从 37% 跳到 **92%**
 - 已在 `pyproject.toml` 写入 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，门槛随真实水平提到 **88%**
-- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **92.3%**（D46 后）
+- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **92.5%**（D47 后）
 - 另补 5 条 token 校验用例（过期 / refresh 当 access 用 / 缺 sub / sub 非数字 / 用户已不存在），`deps/auth.py` 的 401 分支全部有断言
 - 0% 的两处仍是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
 - 剩余未覆盖主要是防御性分支（404 / 冲突 / 非法入参），主路径均由对应路由用例覆盖

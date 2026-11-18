@@ -103,8 +103,8 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **203 passed**（≈46s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 115 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **211 passed**（≈68s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 117 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
 | 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
@@ -127,6 +127,7 @@ hpc-platform/
 | 诊断工具（前三个） | 正常/不存在/超时三态 | **6 条用例：在线/离线节点、ECC 卡状态、日志截断、`not_found`、`invalid_args`、超时截断** | `tests/test_diagnosis_tools.py`；三模块覆盖率 100/100/94% |
 | 工具注册表与 runbook | 只读工具可选，`execute_fix` 不可选 | **5 个只读工具入表；`execute_fix` 仅返回 `requires_approval` 提案（不在 `TOOLS`）；8 本 runbook 按标签/全文检索** | `tests/test_diagnosis_tools_registry.py` |
 | 剧本证据链回归 | 20/20 剧本证据可取 | **56/56 次工具调用返回 ok；4 个多节点剧本的 5 节点同属一个交换机/机架** | `tests/test_diagnosis_evidence.py` |
+| LLM 调用层 | 正常/重试/熔断三态 | **8 条用例：JSON Mode、chat↔reasoner 切换、3 次有界重试、4xx 不重试、超时重传、熔断短路与冷却后半开、坏负载报错** | `tests/test_llm.py`；`core/llm.py` 覆盖 96% |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
@@ -135,7 +136,7 @@ hpc-platform/
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
 | 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |
-| 测试覆盖率 | ≥ 88% | **92.3%**（2474 语句，191 未覆盖） | `make cov`，低于 88% 直接失败 |
+| 测试覆盖率 | ≥ 88% | **92.5%**（2611 语句，196 未覆盖） | `make cov`，低于 88% 直接失败 |
 
 > 未实测项保持「待测」占位，不做估算。
 

@@ -63,6 +63,18 @@ class Settings(BaseSettings):
     # fast; enable it only for demos of the failure path.
     scheduler_failure_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 
+    # ---- DeepSeek LLM (project 2, D47) ----
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    # Per-request timeout; a stuck call must not hold the investigation open.
+    llm_timeout_seconds: float = Field(default=30.0, gt=0)
+    llm_max_retries: int = Field(default=3, ge=1, le=5)
+    # Exponential backoff base; 0 disables the sleep (tests / offline demos).
+    llm_retry_backoff_seconds: float = Field(default=0.5, ge=0)
+    # Circuit breaker: consecutive failed calls before failing fast.
+    llm_circuit_failure_threshold: int = Field(default=3, ge=1)
+    llm_circuit_cooldown_seconds: float = Field(default=30.0, ge=0)
+
     # ---- Billing (F5.2) ----
     billing_currency: str = "CNY"
     # Demo prices per GPU-hour keyed by node ``gpu_model``; ``default`` is the
