@@ -40,8 +40,9 @@ makemigration: ## Autogenerate migration, usage: make makemigration m="add x"
 seed: ## Create default roles + bootstrap admin/user accounts
 	$(COMPOSE) exec api python -m app.initial_data
 
-seed-diagnosis: ## Seed the deterministic mock fleet (50 nodes + 200 history tickets)
+seed-diagnosis: ## Seed the deterministic mock fleet (50 nodes + 200 history tickets + 20 scripts)
 	cd apps/api && python -m app.diagnosis.data.mock
+	cd apps/api && python -m app.diagnosis.data.scripts
 
 api-shell: ## Shell into the api container
 	$(COMPOSE) exec api bash

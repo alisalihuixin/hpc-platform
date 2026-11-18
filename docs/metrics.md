@@ -8,8 +8,8 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **186 passed**（≈33s） | SQLite + fakeredis，无需外部依赖 |
-| 测试覆盖率 | ≥ 88% | **91.5%**（2233 语句 / 189 未覆盖） | `make cov`（`--cov-fail-under=88`） |
+| 单元测试 | 全绿 | **191 passed**（≈34s） | SQLite + fakeredis，无需外部依赖 |
+| 测试覆盖率 | ≥ 88% | **91.7%**（2279 语句 / 189 未覆盖） | `make cov`（`--cov-fail-under=88`） |
 | 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
@@ -38,6 +38,7 @@
 | 迁移可用性 | 双向 | **`base → head → base → head` 通过（0001–0009）** | SQLite 验证；0007/0008 非对应方言降级为 no-op |
 | 诊断域建表（D41） | 7 张表双向可用 | **6 条用例：7 表注册、证据链落库回读、状态/置信度/步序/剧本键 4 类约束拒绝非法值** | `tests/test_diagnosis_models.py`；`models/diagnosis.py` 语句覆盖 100% |
 | 诊断 mock 数据（D42） | 固定种子、两次执行一致 | **50 节点 / 360 卡 / 200 工单（200 run + 600 step + 200 复核）；两个独立库逐行相同；二次 seed 为 no-op** | `tests/test_diagnosis_mock.py`；`make seed-diagnosis`；`data/mock.py` 覆盖 100% |
+| 故障剧本与评估真值（D43） | 剧本→告警→真值三元一致 | **20 剧本 / 5 陷阱（第 7、12、17、18、20 条）；20 告警 + 20 `eval_case` 全部对齐，二次 seed 为 no-op** | `tests/test_diagnosis_scripts.py`；`data/scripts.py` 覆盖 100% |
 
 ## 2. 关键证据
 
@@ -137,7 +138,7 @@ via-next:3000: ReadTimeout（10s 内连响应头都没收到）
 
 - **修正前的数字是错的**：`--cov-fail-under=80` 长期贴着 80.09% 这条线，排查「服务层为什么只有 41%」时发现 SQLAlchemy 异步会把工作交给同步驱动（greenlet 切换），默认 tracer 在协程第一个 DB `await` 之后不再记录任何行 —— `node_service` 同一批用例，加 `--concurrency=greenlet` 后从 37% 跳到 **92%**
 - 已在 `pyproject.toml` 写入 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，门槛随真实水平提到 **88%**
-- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **91.5%**（D42 后）
+- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **91.7%**（D43 后）
 - 另补 5 条 token 校验用例（过期 / refresh 当 access 用 / 缺 sub / sub 非数字 / 用户已不存在），`deps/auth.py` 的 401 分支全部有断言
 - 0% 的两处仍是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
 - 剩余未覆盖主要是防御性分支（404 / 冲突 / 非法入参），主路径均由对应路由用例覆盖
