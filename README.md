@@ -103,8 +103,8 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **173 passed**（≈26.1s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **180 passed**（≈47.4s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 101 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
 | 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
@@ -121,7 +121,7 @@ hpc-platform/
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全返还 | **GPU/CPU/内存归零、不产生流水、重复取消 409** | D34 |
 | 前端首屏 JS | — | **shared 87.1 kB；/jobs 98.5 kB；/dashboard 91.4 kB** | `next build` 输出 |
-| 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0008，SQLite）** | 0007/0008 在非对应方言降级为 no-op |
+| 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0009，SQLite）** | 0007/0008 在非对应方言降级为 no-op |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
@@ -130,7 +130,7 @@ hpc-platform/
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
 | 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |
-| 测试覆盖率 | ≥ 88% | **90.2%**（1924 语句，189 未覆盖） | `make cov`，低于 88% 直接失败 |
+| 测试覆盖率 | ≥ 88% | **90.8%**（2051 语句，189 未覆盖） | `make cov`，低于 88% 直接失败 |
 
 > 未实测项保持「待测」占位，不做估算。
 
@@ -330,7 +330,7 @@ hpc-platform/
 **关键实现**
 
 - [`report_service.py`](apps/api/app/services/report_service.py)：PG 走物化视图，SQLite 无物化视图时退化为实时聚合，两条路径输出同一 `MonthlyRow`；冲正行取负、`job_count` 用 `COUNT(DISTINCT job_id)`。
-- [`0007_monthly_billing.py`](apps/api/alembic/versions/0007_monthly_billing.py)、[`0008_audit_log.py`](apps/api/alembic/versions/0008_audit_log.py)：非对应方言降级为 no-op，迁移链 `0001–0008` 在 SQLite 上 upgrade/downgrade 双向通过。
+- [`0007_monthly_billing.py`](apps/api/alembic/versions/0007_monthly_billing.py)、[`0008_audit_log.py`](apps/api/alembic/versions/0008_audit_log.py)：非对应方言降级为 no-op，迁移链 `0001–0009` 在 SQLite 上 upgrade/downgrade 双向通过。
 - `REFRESH ... CONCURRENTLY` 不能在事务块内执行，刷新走引擎的 AUTOCOMMIT 连接。
 - [`reports/page.tsx`](apps/web/src/app/(app)/reports/page.tsx)：月份用原生 `type="month"` 换算月首/月末；刷新失败或 no-op 时原样展示后端说明，不静默成功。
 - [`audit_triggers.py`](apps/api/app/db/audit_triggers.py)：触发器 DDL 单一来源，迁移与 pytest 引导共用；`jobs` 只在 `status` 变化时留痕，避免调度轮询写爆审计表。

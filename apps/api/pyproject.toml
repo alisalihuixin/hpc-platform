@@ -18,6 +18,12 @@ dependencies = [
     "email-validator>=2.2",
     "arq>=0.26",
     "python-multipart>=0.0.17",
+    # Project 2 - cluster fault-diagnosis agent.
+    "langgraph>=1.0,<2.0",
+    "langfuse>=2.50",
+    # Seeded mock fleet / fault scripts; runtime dependency because the
+    # `seed-diagnosis` command imports it.
+    "faker>=30.0",
 ]
 
 [project.optional-dependencies]

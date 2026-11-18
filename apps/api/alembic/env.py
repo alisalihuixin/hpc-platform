@@ -14,7 +14,22 @@ from app.core.config import settings
 
 # Importing the models package registers every table on Base.metadata.
 from app.db.base import Base
-from app.models import Group, Job, Node, Quota, Role, UsageEvent, User  # noqa: F401
+from app.models import (  # noqa: F401
+    Alert,
+    DiagnosisReview,
+    DiagnosisRun,
+    DiagnosisStep,
+    EvalCase,
+    Group,
+    IncidentNode,
+    Job,
+    Node,
+    Quota,
+    Role,
+    Runbook,
+    UsageEvent,
+    User,
+)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url or "")
