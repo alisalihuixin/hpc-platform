@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     # Circuit breaker: consecutive failed calls before failing fast.
     llm_circuit_failure_threshold: int = Field(default=3, ge=1)
     llm_circuit_cooldown_seconds: float = Field(default=30.0, ge=0)
+    # Per-case token ceiling; crossing it degrades the run to a rule-based report.
+    diagnosis_token_budget: int = Field(default=40_000, ge=1_000)
 
     # ---- Billing (F5.2) ----
     billing_currency: str = "CNY"
