@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 单元测试 | 全绿 | **225 passed**（≈69s） | SQLite + fakeredis，无需外部依赖 |
 | 测试覆盖率 | ≥ 88% | **92.9%**（2749 语句 / 196 未覆盖） | `make cov`（`--cov-fail-under=88`） |
-| 后端规范 | 0 error | **ruff check / format 全过** | 74 个文件（不含迁移） |
+| 后端规范 | 0 error | **ruff check / format 全过** | 124 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发 20 作业：10 running / 10 queued** | 条件 `UPDATE + rowcount` |
@@ -45,6 +45,7 @@
 | LLM 调用层（D47） | 正常/重试/熔断三类 | **8 条用例：JSON Mode、chat↔reasoner 切换、503 两次后第 3 次成功、3 次重试耗尽、401 不重试、传输超时重传、6 次请求后熔断短路、冷却后半开恢复** | `tests/test_llm.py`；`core/llm.py` 覆盖 96% |
 | Token 预算（D48） | 每案 40k 上限、越限只降级一次 | **6 条用例：默认 40k、多次 charge 累计、越限触发钩子且仅一次、恰好等于上限即降级、`as_dict` 快照、`limit<=0` 抛错** | `tests/test_diagnosis_budget.py`；`diagnosis/budget.py` 覆盖 100% |
 | 告警与诊断记录 API（D49） | 提交即落库、可按 id 回查 | **8 条用例：创建告警（201/open）、未知节点 404、未鉴权 401、空摘要 422、开案 201/pending、重复开案 409 且告警转 `diagnosing`、未知告警 404、证据链按 `seq` 回放、未知 run 404** | `tests/test_diagnosis_api.py`；`routers/diagnosis.py`、`services/diagnosis_service.py`、`schemas/diagnosis.py` 覆盖均 100% |
+| 诊断工具耗时（D50） | p95 < 50ms（mock） | **5/5 工具通过，p95 最高为 `get_metrics` 7.0ms（p50 5.0ms）；数据规模 50 节点 / 360 卡 / 220 告警 / 200 历史 run / 600 step / 20 剧本真值 / 8 runbook** | `scripts/bench_diagnosis_tools.py --runs 50`，见 §2.8 |
 
 ## 2. 关键证据
 
@@ -132,10 +133,33 @@ via-next:3000: ReadTimeout（10s 内连响应头都没收到）
 - **修复**：新增 `NEXT_PUBLIC_SSE_BASE_URL`，作业状态流单独用它拼地址；`.env.local` 指向 `http://localhost:8000`（后端 CORS 已含 `http://localhost:3000`），容器栈里留空即走同源。
 - **复测 PASS**：两个标签页均在 `/jobs`，A 在 `/jobs/new` 提交 `e2e-sse-20261110062353` → B **1.17s** 后列表出现该作业（状态「运行中」），B 全程未点刷新、控制台 0 error，网络面板可见 B 直连 `:8000/api/v1/jobs/stream` 的长连接。
 
+### 2.8 诊断工具耗时（D50 / M5 验收）
+
+命令：`cd apps/api && python scripts/bench_diagnosis_tools.py --runs 50`
+
+数据规模（同一临时库）：
+
+```
+incident_nodes=50 / gpus=360 / alerts=220 / diagnosis_runs=200
+diagnosis_steps=600 / diagnosis_reviews=200 / eval_cases=20 / runbooks=8
+```
+
+| 工具 | p50 | p95 | max |
+|---|---|---|---|
+| `get_node_status` | 2.0 ms | 3.0 ms | 3 ms |
+| `get_node_gpus` | 2.0 ms | 3.0 ms | 3 ms |
+| `get_job_logs` | 2.0 ms | 3.0 ms | 3 ms |
+| `get_metrics` | 5.0 ms | 7.0 ms | 22 ms |
+| `search_runbooks` | 2.0 ms | 3.0 ms | 3 ms |
+
+- **5/5 p95 < 50 ms**（SQLite，单进程；真实 SSH/DB 延迟属 M8 集成环境）
+- 耗时取自工具返回的 `latency_ms`，不是压测框架的墙钟，避免把 harness 开销算进工具
+- `get_metrics` 最慢是预期的：它要全量扫 50 个节点并展开每张卡的 `tags.gpus`
+- M5 验收：`pytest` 225 passed / 覆盖率 92.9% / 20 剧本证据链 56/56 可取而工具可控
+
 ## 3. 待测 / 未验证
 
 | 项 | 状态 | 原因 |
-|---|---|---|
 | 双浏览器 SSE ≤2s 同步 | 已实测 | 两个真实标签页 **1.17s**；dev 代理缓冲 SSE 的坑已修，见 §2.7 |
 | 前端浏览器 E2E | 部分实测 | 登录、`/jobs`、`/admin/audit`、`/dashboard` 已点按；建组/改配额/建用户三条表单链路已实测并落库 |
 | PostgreSQL 侧 p95 | 待测 | 本机无 PG，压测仅在 SQLite 上完成 |

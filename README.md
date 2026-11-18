@@ -130,6 +130,7 @@ hpc-platform/
 | LLM 调用层 | 正常/重试/熔断三态 | **8 条用例：JSON Mode、chat↔reasoner 切换、3 次有界重试、4xx 不重试、超时重传、熔断短路与冷却后半开、坏负载报错** | `tests/test_llm.py`；`core/llm.py` 覆盖 96% |
 | Token 预算 | 每案 40k 上限 | **6 条用例：默认 40k、累计、越限只触发一次降级钩子、恰好等于上限即降级、快照、非法上限报错** | `tests/test_diagnosis_budget.py`；`diagnosis/budget.py` 覆盖 100% |
 | 告警与诊断记录 API | 提交→落库→可回查 | **8 条用例：告警创建/404/401/422、开案 201、重复开案 409、证据链按 `seq` 回放、未知 run 404** | `tests/test_diagnosis_api.py`；路由/服务/schema 覆盖 100% |
+| 诊断工具耗时（M5 验收） | p95 < 50ms（mock） | **5/5 工具通过；最慢 `get_metrics` p95 7.0ms；数据规模 50 节点 / 360 卡 / 220 告警 / 20 真值 / 8 runbook** | `scripts/bench_diagnosis_tools.py --runs 50`，SQLite |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
