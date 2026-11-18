@@ -437,7 +437,7 @@ async def seed_diagnosis_data(db: AsyncSession, *, fleet: Fleet | None = None) -
                 status=node.status.value,
                 schedulable=node.schedulable,
                 heartbeat_at=node.heartbeat_at,
-                tags=node.tags,
+                tags={**node.tags, "logs": list(fleet.logs[node.hostname])},
                 created_at=BASE_TIME,
             )
             for node in fleet.nodes
