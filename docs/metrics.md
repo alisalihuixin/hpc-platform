@@ -8,9 +8,9 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **225 passed**（≈69s） | SQLite + fakeredis，无需外部依赖 |
-| 测试覆盖率 | ≥ 88% | **92.9%**（2749 语句 / 196 未覆盖） | `make cov`（`--cov-fail-under=88`） |
-| 后端规范 | 0 error | **ruff check / format 全过** | 124 个文件（不含迁移） |
+| 单元测试 | 全绿 | **235 passed**（≈68s） | SQLite + fakeredis，无需外部依赖 |
+| 测试覆盖率 | ≥ 88% | **93.2%**（2882 语句 / 196 未覆盖） | `make cov`（`--cov-fail-under=88`） |
+| 后端规范 | 0 error | **ruff check / format 全过** | 126 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发 20 作业：10 running / 10 queued** | 条件 `UPDATE + rowcount` |
@@ -46,6 +46,7 @@
 | Token 预算（D48） | 每案 40k 上限、越限只降级一次 | **6 条用例：默认 40k、多次 charge 累计、越限触发钩子且仅一次、恰好等于上限即降级、`as_dict` 快照、`limit<=0` 抛错** | `tests/test_diagnosis_budget.py`；`diagnosis/budget.py` 覆盖 100% |
 | 告警与诊断记录 API（D49） | 提交即落库、可按 id 回查 | **8 条用例：创建告警（201/open）、未知节点 404、未鉴权 401、空摘要 422、开案 201/pending、重复开案 409 且告警转 `diagnosing`、未知告警 404、证据链按 `seq` 回放、未知 run 404** | `tests/test_diagnosis_api.py`；`routers/diagnosis.py`、`services/diagnosis_service.py`、`schemas/diagnosis.py` 覆盖均 100% |
 | 诊断工具耗时（D50） | p95 < 50ms（mock） | **5/5 工具通过，p95 最高为 `get_metrics` 7.0ms（p50 5.0ms）；数据规模 50 节点 / 360 卡 / 220 告警 / 200 历史 run / 600 step / 20 剧本真值 / 8 runbook** | `scripts/bench_diagnosis_tools.py --runs 50`，见 §2.8 |
+| LangGraph 骨架（D51） | 图可编译、dry-run 走通一轮 | **10 条用例：节点顺序 `plan→call_tool→observe→plan`、证据 `E01` 入 state、迭代计数 1、两轮共 30 tokens、非法工具/非对象 args/坏 JSON/熔断均快速失败、工具报错（`not_found`/`invalid_args`）留在证据链、预算耗尽后不再发请求** | `tests/test_diagnosis_graph.py`；`diagnosis/graph/graph.py` 覆盖 100% |
 
 ## 2. 关键证据
 
@@ -168,7 +169,7 @@ diagnosis_steps=600 / diagnosis_reviews=200 / eval_cases=20 / runbooks=8
 
 - **修正前的数字是错的**：`--cov-fail-under=80` 长期贴着 80.09% 这条线，排查「服务层为什么只有 41%」时发现 SQLAlchemy 异步会把工作交给同步驱动（greenlet 切换），默认 tracer 在协程第一个 DB `await` 之后不再记录任何行 —— `node_service` 同一批用例，加 `--concurrency=greenlet` 后从 37% 跳到 **92%**
 - 已在 `pyproject.toml` 写入 `[tool.coverage.run] concurrency = ["greenlet", "thread"]`，门槛随真实水平提到 **88%**
-- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **92.9%**（D49 后）
+- 修正后：核心服务 92%–100%（`job_service` 100%、`quota_service` 98%、`node_service` 96%、`user_service` 94%、`group_service` 92%），当前总计 **93.2%**（D51 后）
 - 另补 5 条 token 校验用例（过期 / refresh 当 access 用 / 缺 sub / sub 非数字 / 用户已不存在），`deps/auth.py` 的 401 分支全部有断言
 - 0% 的两处仍是胶水代码：`initial_data.py`（种子脚本）、`workers/*`（ARQ 入口与轮询循环）
 - 剩余未覆盖主要是防御性分支（404 / 冲突 / 非法入参），主路径均由对应路由用例覆盖

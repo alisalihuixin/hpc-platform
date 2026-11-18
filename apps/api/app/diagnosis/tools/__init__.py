@@ -11,7 +11,7 @@ human applies it.
 
 from __future__ import annotations
 
-from app.diagnosis.tools.base import TOOL_TIMEOUT_SECONDS, ToolResponse
+from app.diagnosis.tools.base import TOOL_TIMEOUT_SECONDS, ToolErrorCode, ToolResponse
 from app.diagnosis.tools.fix import execute_fix
 from app.diagnosis.tools.logs import get_job_logs
 from app.diagnosis.tools.metrics import get_metrics
@@ -29,6 +29,7 @@ TOOLS = {
 __all__ = [
     "TOOLS",
     "TOOL_TIMEOUT_SECONDS",
+    "ToolErrorCode",
     "ToolResponse",
     "execute_fix",
     "get_job_logs",

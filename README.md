@@ -103,8 +103,8 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **225 passed**（≈69s） | SQLite + fakeredis，无需外部依赖 |
-| 后端规范 | 0 error | **ruff check / format 全过** | 117 个文件已格式化（不含迁移） |
+| 单元测试 | 全绿 | **235 passed**（≈68s） | SQLite + fakeredis，无需外部依赖 |
+| 后端规范 | 0 error | **ruff check / format 全过** | 126 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
 | 取消作业幂等 | 重复取消不二次返还 | **第二次 409，`gpu_used` 保持 0** | 条件 `UPDATE` + `rowcount` 判定 |
@@ -131,6 +131,7 @@ hpc-platform/
 | Token 预算 | 每案 40k 上限 | **6 条用例：默认 40k、累计、越限只触发一次降级钩子、恰好等于上限即降级、快照、非法上限报错** | `tests/test_diagnosis_budget.py`；`diagnosis/budget.py` 覆盖 100% |
 | 告警与诊断记录 API | 提交→落库→可回查 | **8 条用例：告警创建/404/401/422、开案 201、重复开案 409、证据链按 `seq` 回放、未知 run 404** | `tests/test_diagnosis_api.py`；路由/服务/schema 覆盖 100% |
 | 诊断工具耗时（M5 验收） | p95 < 50ms（mock） | **5/5 工具通过；最慢 `get_metrics` p95 7.0ms；数据规模 50 节点 / 360 卡 / 220 告警 / 20 真值 / 8 runbook** | `scripts/bench_diagnosis_tools.py --runs 50`，SQLite |
+| LangGraph 诊断骨架 | 图可编译、一轮闭环 | **10 条用例：`plan→call_tool→observe→plan` 顺序、证据 `E01` 落 state、两轮计费 30 tokens、非法工具/坏 JSON/熔断快速失败、预算耗尽即停发请求** | `tests/test_diagnosis_graph.py`；`graph.py` 覆盖 100% |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
@@ -139,7 +140,7 @@ hpc-platform/
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
 | 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |
-| 测试覆盖率 | ≥ 88% | **92.9%**（2749 语句，196 未覆盖） | `make cov`，低于 88% 直接失败 |
+| 测试覆盖率 | ≥ 88% | **93.2%**（2882 语句，196 未覆盖） | `make cov`，低于 88% 直接失败 |
 
 > 未实测项保持「待测」占位，不做估算。
 
