@@ -3,8 +3,8 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 
-.PHONY: help up down restart logs ps rebuild migrate makemigration seed api-shell \
-        test cov lint fmt gen-api fe-dev api-dev clean
+.PHONY: help up down restart logs ps rebuild migrate makemigration seed seed-diagnosis \
+        api-shell test cov lint fmt gen-api fe-dev api-dev clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -39,6 +39,9 @@ makemigration: ## Autogenerate migration, usage: make makemigration m="add x"
 
 seed: ## Create default roles + bootstrap admin/user accounts
 	$(COMPOSE) exec api python -m app.initial_data
+
+seed-diagnosis: ## Seed the deterministic mock fleet (50 nodes + 200 history tickets)
+	cd apps/api && python -m app.diagnosis.data.mock
 
 api-shell: ## Shell into the api container
 	$(COMPOSE) exec api bash
