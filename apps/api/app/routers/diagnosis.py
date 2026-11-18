@@ -1,14 +1,16 @@
-"""Diagnosis endpoints (D49): alert intake + run records.
+"""Diagnosis endpoints (D49/D54): alert intake, run records and the live stream.
 
-Executing the agent is M6's job - these endpoints persist the two records the
-graph will later write into, and let the UI poll a run by id.
+Opening a diagnosis only records intent; the graph runs when a viewer subscribes
+to ``/diagnosis/{id}/stream``, and every graph node is persisted as one
+``diagnosis_steps`` row before its SSE frame is sent.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, status
+from fastapi.responses import StreamingResponse
 
-from app.deps import CurrentUser, SessionDep
+from app.deps import CurrentUser, DiagnosisLLMDep, SessionDep
 from app.schemas.diagnosis import (
     AlertCreate,
     AlertRead,
@@ -16,7 +18,7 @@ from app.schemas.diagnosis import (
     DiagnosisRead,
     DiagnosisStepRead,
 )
-from app.services import diagnosis_service
+from app.services import diagnosis_service, diagnosis_stream
 
 router = APIRouter(tags=["diagnosis"])
 
@@ -51,4 +53,25 @@ async def get_diagnosis(run_id: int, db: SessionDep, user: CurrentUser) -> Diagn
     steps = await diagnosis_service.list_steps(db, run_id)
     return DiagnosisRead.model_validate(run).model_copy(
         update={"steps": [DiagnosisStepRead.model_validate(step) for step in steps]}
+    )
+
+
+@router.get("/diagnosis/{run_id}/stream", summary="Diagnosis progress stream (SSE)")
+async def stream_diagnosis_run(
+    run_id: int, db: SessionDep, user: CurrentUser, llm: DiagnosisLLMDep
+) -> StreamingResponse:
+    """Execute a pending run and stream every step as it is persisted.
+
+    A terminal run is replayed from ``diagnosis_steps`` instead of spending
+    another model call, so a page refresh cannot restart the investigation.
+    """
+    run = await diagnosis_service.get_run(db, run_id)
+    return StreamingResponse(
+        diagnosis_stream.stream_diagnosis(db, run, llm=llm),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

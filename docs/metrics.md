@@ -8,9 +8,9 @@
 
 | 指标 | 目标 | 实测 | 说明 |
 |---|---|---|---|
-| 单元测试 | 全绿 | **249 passed**（≈72s） | SQLite + fakeredis，无需外部依赖 |
-| 测试覆盖率 | ≥ 88% | **93.5%**（2994 语句 / 196 未覆盖） | `make cov`（`--cov-fail-under=88`） |
-| 后端规范 | 0 error | **ruff check / format 全过** | 126 个文件（不含迁移） |
+| 单元测试 | 全绿 | **257 passed**（≈123s） | SQLite + fakeredis，无需外部依赖 |
+| 测试覆盖率 | ≥ 88% | **93.77%**（3129 语句 / 195 未覆盖） | `make cov`（`--cov-fail-under=88`） |
+| 后端规范 | 0 error | **ruff check / format 全过** | 130 个文件（不含迁移） |
 | 配额并发防超卖 | 20 并发不超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit=100`** | 文件库多连接真并发 |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣 + 入队同事务 |
 | 调度并发不超分 | 多调度器不重复占位 | **两路并发 20 作业：10 running / 10 queued** | 条件 `UPDATE + rowcount` |
@@ -49,6 +49,7 @@
 | LangGraph 骨架（D51） | 图可编译、dry-run 走通一轮 | **10 条用例：节点顺序 `plan→call_tool→observe→plan`、证据 `E01` 入 state、迭代计数 1、两轮共 30 tokens、非法工具/非对象 args/坏 JSON/熔断均快速失败、工具报错（`not_found`/`invalid_args`）留在证据链、预算耗尽后不再发请求** | `tests/test_diagnosis_graph.py`；`diagnosis/graph/graph.py` 覆盖 100% |
 | 自检与报告节点（D52） | 无证据结论被校验拒绝 | **10 条新增/调整用例：节点顺序 `plan→call_tool→observe→plan→reflect→report`；`reflect` 证据不足回环补证据、无证据时提示先取证据；报告引用 `E01` 通过并落 state，空 `evidence_refs` 与未知 `E99` 均以 `report:` 失败；reflect/report 断网、非布尔自检、预算中途耗尽均干净收尾** | `tests/test_diagnosis_graph.py`（D52 新增 10 条）；`graph.py`/`report.py` 覆盖 100% |
 | 循环护栏（D53） | 死循环 6 步内终止 | **4 条新增用例：重复工具+参数第二次不再执行、7 次不同查询在第 6 次后停机（LLM 仅调 6 次）、reflect 无证据 ping-pong 3 次封顶、无证据降级不出报告；任一护栏触发都写规则报告并引用全部证据；`recursion_limit=26`** | `tests/test_diagnosis_graph.py` 累计 24 条；`graph.py`/`report.py` 覆盖 100% |
+| 步骤落库与 SSE 推送（D54） | 时序与库一致、断连不留假 running | **8 条用例：一次诊断 6 个节点按 `plan→tool→observe→plan→reflect→report` 先落库再推送同序帧；终态 run 只回放不调模型；他人占用的 running run 不重复执行；断连把 run 置 `failed` 且告警回 `open`；图内异常以 `stream:` 收尾；HTTP 返回 `text/event-stream`，6 个 step 帧先于 `run.finished`** | `tests/test_diagnosis_stream.py`；`services/diagnosis_stream.py`、`routers/diagnosis.py`、`deps/diagnosis.py` 覆盖均 100% |
 
 ## 2. 关键证据
 

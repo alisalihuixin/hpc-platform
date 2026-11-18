@@ -501,16 +501,13 @@ async def invoke_tool(
         return ToolResponse.failure(tool, ToolErrorCode.INVALID_ARGS, f"missing argument {exc}")
 
 
-async def run_diagnosis(
-    db: AsyncSession,
-    alert: AlertContext,
-    *,
-    llm: Completer | None = None,
-    budget: TokenBudget | None = None,
-) -> DiagnosticState:
-    """Convenience entry point: seed the state with the alert briefing."""
-    graph = build_diagnosis_graph(db=db, llm=llm, budget=budget)
-    initial: DiagnosticState = {
+def build_initial_state(alert: AlertContext) -> DiagnosticState:
+    """Seed the graph with the system prompt plus the alert briefing.
+
+    Shared by :func:`run_diagnosis` and the streaming runner (D54) so both
+    entry points send the model exactly the same first turn.
+    """
+    return {
         "alert": alert,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT.format(catalogue=_catalogue())},
@@ -520,8 +517,21 @@ async def run_diagnosis(
         "iterations": 0,
         "status": RunStatus.RUNNING.value,
     }
+
+
+async def run_diagnosis(
+    db: AsyncSession,
+    alert: AlertContext,
+    *,
+    llm: Completer | None = None,
+    budget: TokenBudget | None = None,
+) -> DiagnosticState:
+    """Convenience entry point: seed the state with the alert briefing."""
+    graph = build_diagnosis_graph(db=db, llm=llm, budget=budget)
     # Belt and braces: even a graph bug cannot exceed the super-step ceiling.
-    return await graph.ainvoke(initial, config={"recursion_limit": GRAPH_RECURSION_LIMIT})
+    return await graph.ainvoke(
+        build_initial_state(alert), config={"recursion_limit": GRAPH_RECURSION_LIMIT}
+    )
 
 
 def _catalogue() -> str:
@@ -590,6 +600,7 @@ __all__ = [
     "TOOL_CATALOGUE",
     "build_diagnosis_graph",
     "build_fallback_report",
+    "build_initial_state",
     "invoke_tool",
     "route_after_plan",
     "route_after_reflect",
