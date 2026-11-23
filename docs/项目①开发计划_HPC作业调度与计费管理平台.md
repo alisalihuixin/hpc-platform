@@ -282,7 +282,7 @@ D17 作业模型 ─────────────────────
 - **设计取舍**：不使用原生 `EventSource`——它无法设置 `Authorization` 头，把 token 放进 URL 会进入访问日志；改用 `fetch` 携带 Bearer 头流式读取，401 时先刷新令牌再重连，断线 3s 自动重连
 - **刷新策略**：列表对事件做 300ms 去抖，避免 100 作业 demo 的事件风暴打爆接口；详情只关心当前作业的事件
 - **验证**：`npm run typecheck` / `lint` / `build` 全过（10 条路由，/jobs 首屏 98.7 kB）
-- **未验证**：双浏览器 ≤2s 端到端（需 PG/Redis/worker 起服务，归入 D28）
+- **未验证**：双浏览器 ≤2s 端到端（需 PG/Redis/worker 起服务，归入 D28；后续已用 `dev_stack.py` + 双标签页实测 1.17s 收口）
 
 ### D28 · 双浏览器 SSE 验收 —— 已完成（dev 代理坑已修）
 
@@ -344,13 +344,13 @@ D17 作业模型 ─────────────────────
 - **回归揪出的真 bug**：`_finalize_job` 的 `ended_at` 原本写 `func.now()`，而计费用的是注入的 `current`。两者在真实时钟下几乎相等所以旧用例全绿，但一旦回放/注入时间（如 2026-03-02 起跑），作业详情 `gpu_minutes` 会算成 72 万分钟，与 `usage_events.duration_min=60` 对不上。已改为统一写 `current`，作业详情与计费流水同源。
 - **证据**：pytest **158 passed**（+5）；`ruff check` / `ruff format` 全过
 
-### D35 · M3 验收 —— 已完成（除 D28 实测项）
+### D35 · M3 验收 —— 已完成（D28 已于追加轮次实测收口）
 
 | # | 验收项 | 结论 | 证据 |
 |---|---|---|---|
 | 1 | 状态变更即发布、非 admin 只见自己的作业 | ✅ | `test_job_events.py` 发布/订阅往返、用户过滤、四处变更点 |
 | 2 | 前端收到 `job.updated` 即刷新 | ✅ 代码级 | `fetch` 流式 + 401 刷新重连；列表 300ms 去抖、详情按 `job_id` 过滤 |
-| 3 | 双浏览器 ≤2s 刷新 | ⏳ 环境阻塞 | Docker Desktop 未运行；本机 6379 的 Redis 需认证，`.env` 是无密码 URL |
+| 3 | 双浏览器 ≤2s 刷新 | ✅ 1.17s | 两个真实标签页，A 提交后 B 未刷新即出现新作业；修掉 dev 代理缓冲 SSE（见「浏览器四轮」） |
 | 4 | 节点管理页可用 | ✅ | `/admin/nodes` CRUD + 上下线；`offline`/`draining` 不接收新作业（调度器用例） |
 | 5 | 配额管理页可用 | ✅ | `/admin/quotas` 编辑；`gpu_limit < gpu_used` 前后端双校验（409） |
 | 6 | 用户管理页可用 | ✅ | `/admin/users` 新建/角色/启停/重置密码；角色变更无需重新登录 |
@@ -367,12 +367,15 @@ ruff format --check app tests     → 79 files already formatted
 cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 ```
 
-**阻塞项复现步骤（D28，待环境恢复）**
+**D28 收口（已实测 1.17s）**
 
-1. 提供可用的 Redis（本机需 `requirepass` 对应 `REDIS_URL`，或启动 Docker Desktop 后 `make up`）
-2. 同时起 API + ARQ worker + Web
-3. 浏览器 A 登 admin 打开 `/jobs`，浏览器 B 登 user 提交/取消作业
-4. 记录 A 侧列表刷新延迟，断言 ≤2s；把实测值补进 `docs/metrics.md`
+D35 当时因 Docker 未运行、本机 Redis 需认证而挂起，后续用 `scripts/dev_stack.py`（SQLite + fakeredis）+ `npm run dev` 补齐：两个标签页停在 `/jobs`，A 提交 → B **1.17s** 出现新作业，0 console error。过程中定位并修复了 Next dev rewrite 缓冲 SSE 的 dev-only 缺陷（详见「浏览器四轮：双标签 SSE」）。
+
+复现方式（保留供回归）：
+
+1. `cd apps/api && python scripts/dev_stack.py --reset`，另起 `cd apps/web && npm run dev`
+2. 浏览器 A 打开 `/jobs`，浏览器 B 打开 `/jobs/new` 并提交作业
+3. 记录 A 侧列表出现该作业的延迟，断言 ≤2s；数字写入 `docs/metrics.md`
 
 **遗留（不阻塞 M3 收口）**
 
@@ -440,8 +443,9 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 
 ### 项目①状态
 
-- M1–M3 完成，M4 除「PG 实测 / 浏览器 E2E」外完成
-- 剩余待办：D28 双浏览器 SSE 实测、PG 物化视图与触发器实测、真实域名部署
+- M1–M4 全部完成（M3 含 D28 双标签 1.17s 实测；M4 含浏览器四轮复核）
+- 剩余待办：PG 物化视图 / 触发器与 p95 实测、真实域名部署
+- 说明：D29–D37 各日写下的「未验证：浏览器…（同 D28 环境阻塞）」是当日实况，后续「浏览器一~四轮」已统一补齐（登录、`/jobs`、四个管理页、`/dashboard`、双标签 SSE），以本节与 `docs/metrics.md` 为准
 
 ### 追加 · 登录延迟闭环（D40 后）
 
@@ -455,7 +459,7 @@ cd apps/web && npm run build      → 14 条路由，typecheck + lint 全过
 - **产出**：`scripts/dev_stack.py` —— 一条命令起本地演示栈（SQLite + fakeredis + 进程内调度循环），自动建角色/演示账号/default 组/一台 8 卡 A100 节点，前端 `npm run dev` 连上即可双浏览器验收
 - **实测**：提交 `walltime_min=1` 作业 → 4s 内 `completed`、`gpu_minutes=2`、配额与槽位归零；另一客户端订阅 SSE，从提交到收到 `queued` 事件 **122.4ms**（目标 ≤2s）
 - **顺带修的 bug**：`initial_data._ensure_group` 访问 `group.members` 触发 async 懒加载 → `make seed` 在组已存在时直接 `MissingGreenlet` 崩溃。改为直接查/插 `user_groups` 关联表，命令幂等
-- **仍未闭环**：浏览器渲染层（需人工开两个窗口）、真实 PG/Redis 栈
+- **仍未闭环**：浏览器渲染层（需人工开两个窗口）、真实 PG/Redis 栈 —— 均已在后续「浏览器二~四轮」补齐，仅真实 PG/Redis 栈仍待环境
 
 ### 追加 · 覆盖率门槛（D40 后）
 
