@@ -546,3 +546,4 @@ CI（`.github/workflows/ci.yml`）：后端 `ruff check` + `ruff format --check`
 
 - 需求：[项目②需求文档](docs/项目②需求文档_集群故障诊断Agent.md)
 - 计划：[项目②开发计划](docs/项目②开发计划_集群故障诊断Agent.md)（D41–D65）
+- 进度：M5 已验收；M6 进行中，D54「步骤落库 + SSE 流式诊断」已完成，下一步 D55 前端诊断列表与时间线
