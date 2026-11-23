@@ -2,7 +2,7 @@
 
 HPC 作业调度与计费管理平台（FastAPI + PostgreSQL + Redis 增强）。
 
-当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D27、D29–D35）** ｜ **M4 报表 + 审计 + 收口 ✅ 完成（D36–D40）** ｜ 待补：D28 双浏览器 SSE 实测、PG 侧实测、真实域名部署
+当前进度：**M1 骨架与认证 ✅** ｜ **M2 资源 / 配额 / 作业 / 计量 ✅ 完成（D11–D25）** ｜ **M3 SSE + 管理页 ✅ 完成（D26–D35，含 D28 双标签 1.17s 实测）** ｜ **M4 报表 + 审计 + 收口 ✅ 完成（D36–D40）** ｜ 待补：PG 侧实测、真实域名部署
 
 > **README 约定**：开工先立骨架（架构图 / 技术选型 / 量化指标占位），每完成一个里程碑补一节。
 
@@ -248,7 +248,7 @@ hpc-platform/
 | 14 | F5.1 流水只增不改 + 冲正 | ✅ 原行保留、补偿行 `reversed=true`、净卡时 0、重复冲正幂等 |
 | 15 | F5.3 明细合计 = 汇总值 | ✅ `sum(signed_gpu_hours) == total_gpu_hours`（含冲正场景 `1.5`） |
 | 16 | F5.4 排行与明细对账一致 | ✅ 组内成员按净卡时降序，行合计 = `total_gpu_hours` |
-| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过；浏览器 E2E 待 D27 |
+| 17 | M2 前端联调可用 | ✅ typecheck + lint + build 全过；浏览器 E2E 已实测（D28 替代证据，见 [metrics §2.6](docs/metrics.md)） |
 | 18 | 调度策略一行切换且有差异 | ✅ FIFO 首批 `[1..10]`；Priority 首批 `[28,55,82,9,…]` |
 | 19 | CPU / 内存不足时排队不崩溃 | ✅ 单测：`num_cpus=8` 对 4 核、`mem_gb=16` 对 8G 均保持 queued |
 | 20 | 崩溃回收 | ✅ 租约过期 → failed + 节点槽位归零 + 流水照记（10 分钟） |
@@ -267,20 +267,20 @@ hpc-platform/
 - 结束计费：[`scheduler_service.py`](apps/api/app/services/scheduler_service.py) —— walltime 到期/故障注入 → 终态 + 释放节点卡 + 追加 `usage_events`（只增不改）；`duration_min` 向上取整，`gpu_hours` 与详情页 `gpu_minutes` 同源。
 - 计费与冲正：[`billing_service.py`](apps/api/app/services/billing_service.py) —— `gpu_hours`（4 位小数）、按 `gpu_model` 固化 `rate_snapshot`（改价不影响历史）、`reverse_job_usage` 追加 `reversed` 补偿行、`net_gpu_hours` 汇总扣减。
 - 用量查询：[`usage_service.py`](apps/api/app/services/usage_service.py) —— 明细按 `started_at` 过滤并逐行给出 `signed_gpu_hours`；组排行 `SUM(CASE reversed THEN -gpu_hours ELSE gpu_hours END)` + `COUNT(DISTINCT job_id)`，保证冲正后仍能对账。
-- M2 前端：[`jobs/page.tsx`](apps/web/src/app/(app)/jobs/page.tsx)、[`jobs/new/page.tsx`](apps/web/src/app/(app)/jobs/new/page.tsx)、[`jobs/[id]/page.tsx`](apps/web/src/app/(app)/jobs/[id]/page.tsx)、[`nodes/page.tsx`](apps/web/src/app/(app)/nodes/page.tsx)、[`usage/page.tsx`](apps/web/src/app/(app)/usage/page.tsx) —— 提交页按组配额同规则预校验；详情页在排队/运行时 3s 轮询（SSE 待 D26）。
+- M2 前端：[`jobs/page.tsx`](apps/web/src/app/(app)/jobs/page.tsx)、[`jobs/new/page.tsx`](apps/web/src/app/(app)/jobs/new/page.tsx)、[`jobs/[id]/page.tsx`](apps/web/src/app/(app)/jobs/[id]/page.tsx)、[`nodes/page.tsx`](apps/web/src/app/(app)/nodes/page.tsx)、[`usage/page.tsx`](apps/web/src/app/(app)/usage/page.tsx) —— 提交页按组配额同规则预校验；详情页在排队/运行时 3s 轮询兜底，M3 起接 SSE 实时刷新。
 - 数据兜底：[`quota.py`](apps/api/app/models/quota.py) 的 CHECK `gpu_used <= gpu_limit`，应用层有 bug 也越不过去。
 - 并发用例：[`test_quota.py`](apps/api/tests/test_quota.py) 用**文件库多连接**制造真并发（in-memory + `StaticPool` 单连接会串行化，测不出竞态）。
 
 **遗留 / 风险**
 
 - 组管理页与报表：组管理已完成（D32），报表属 M4（D36–D37）。
-- M3 已收口（D35）：9 项验收 8 项通过，D28 双浏览器 ≤2s 实测因 Redis 环境阻塞仍待补测。
-- 浏览器端到端联调尚未执行（Docker 未运行、本机 Redis 需密码），环境恢复后按 D28 统一实测。
+- M3 已收口（D35）：9 项验收 9 项通过；D28 双标签页实测 **1.17s**（见 [metrics §2.7](docs/metrics.md)），过程中修掉 Next dev 代理缓冲 SSE 的 dev-only 缺陷。
+- 浏览器端到端已实测：登录、`/jobs`、`/admin/audit`、`/dashboard`，以及建组 / 改配额 / 建用户三条表单链路（D28 替代证据，见 metrics §2.6）。
 - 与 PRD 的偏差：`PUT` vs `PATCH`、`/healthz` vs `/health`、组排行仅 admin 已登记在开发计划第 8 节；**限流窗口已按 PRD 对齐为 5 分钟（300s）**
 
-### M3 SSE + 管理页 —— ✅ 完成（D26–D27、D29–D35；D28 双浏览器实测待环境）
+### M3 SSE + 管理页 —— ✅ 完成（D26–D35）
 
-> 进度与验收记录见开发计划第 8 节 D26–D35。M3 验收 9 项：8 项通过，唯一未闭环项是 D28 的双浏览器 ≤2s 实测（Redis 环境阻塞，复现步骤已写入计划）。
+> 进度与验收记录见开发计划第 8 节 D26–D35。M3 验收 9 项全部通过，其中 D28 用两个真实标签页实测：标签 A 提交后标签 B **1.17s** 出现新作业（≤2s 目标）。
 
 **已完成**
 
@@ -305,7 +305,7 @@ hpc-platform/
 | --- | --- | --- |
 | 1 | 状态变更即发布、非 admin 只见自己的作业 | ✅ 发布/订阅往返、用户过滤、四处变更点单测覆盖 |
 | 2 | 前端收到 `job.updated` 即刷新 | ✅ 代码已接入（列表去抖 / 详情过滤） |
-| 3 | 双浏览器 ≤2s 刷新 | ⏳ 环境阻塞：Docker 未运行、本机 Redis 需密码 |
+| 3 | 双浏览器 ≤2s 刷新 | ✅ 两真实标签页实测 **1.17s**；修复 dev 代理缓冲 SSE（`NEXT_PUBLIC_SSE_BASE_URL`） |
 | 4 | 下线节点不再接收新作业 | ✅ 调度器用例覆盖 offline / draining 跳过 |
 | 5 | 调低配额不杀在跑作业 | ✅ 仅改上限；`gpu_limit < gpu_used` 返回 409（前后端双校验） |
 | 6 | 用户管理：新用户可登录、角色即时生效 | ✅ 重置密码后旧密码 401；改角色后旧 token 直接获得新权限（RBAC 每请求读库） |
@@ -322,7 +322,7 @@ hpc-platform/
 
 **遗留**
 
-- 真实 Redis + 浏览器 SSE 联动待 D28 起服务实测（双浏览器 ≤2s 同步）。
+- 生产形态（真实 Redis + 多副本）与 PG 侧指标仍待环境实测；单实例链路已由 `scripts/dev_stack.py` + 双标签页实测覆盖。
 
 ### M4 报表 + 审计 + 上线 —— ✅ 完成（D36–D40）
 
