@@ -22,11 +22,12 @@
 | M5（D41–D50） | ✅ 已验收 | 20 剧本 / 5 个只读工具 / LLM 层 / 预算 / 告警与开案 API；工具 p95 最高 7.0ms |
 | D51–D53 | ✅ 已完成 | `plan→call_tool→observe` 骨架、`reflect`/`report` 强制引用 `evidence_id`、四道循环护栏 + 规则降级报告 |
 | D54 | ✅ 已完成 | 步骤落库 + `GET /diagnosis/{id}/stream`；终态回放、断连收尾；前端 `useDiagnosisEvents` 复用共享 `lib/api/sse.ts` |
-| **D55** | 👉 **下一个** | `/diagnosis` 列表 + `/diagnosis/[id]` 时间线与报告区 |
-| D56–D60 | 待开工 | Langfuse 接入 → 评估首跑 → chat/reasoner 对比 → prompt 调优 → M6 验收 |
+| D55 | ✅ 已完成 | `GET /diagnosis` 列表（筛选/分页/告警摘要）+ `/diagnosis` 列表页 + `/diagnosis/[id]` 时间线与报告区 |
+| **D56** | 👉 **下一个** | Langfuse self-hosted 接入，`trace_id` 落库并从报告页跳转 |
+| D57–D60 | 待开工 | 评估首跑 → chat/reasoner 对比 → prompt 调优 → M6 验收 |
 | D61–D65 | 待开工 | Supervisor 并行多案 → 关联分析 → 人工复核 → 评估合并 → M7 收口 |
 
-- 代码现状：pytest **257 passed / 93.77%**，`ruff` 130 文件全过（详见 `docs/metrics.md`）。
+- 代码现状：pytest **261 passed / 93.82%**，`ruff` 全过；前端 17 条路由 build 通过（详见 `docs/metrics.md`）。
 - 与计划的偏差（已落地）：测试按项目①惯例平铺在 `tests/test_diagnosis_*.py`，未建 `tests/diagnosis/` 子包；D54 把项目①的 SSE 传输抽成共享 `sse.ts`，作业流与诊断流共用鉴权/重连/帧解析。
 - 后续环境依赖：D55 只依赖现有 API（无外部服务）；D56 需 Docker 起 Langfuse（起不来则按风险表降级为本地 JSON trace）；D57/D58 需 `DEEPSEEK_API_KEY`，无 key 时先用假客户端跑通脚本、真实命中率待 key 到位再补。
 

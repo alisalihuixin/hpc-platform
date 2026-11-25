@@ -74,3 +74,26 @@ class DiagnosisRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     steps: list[DiagnosisStepRead] = Field(default_factory=list)
+
+
+class DiagnosisListItem(BaseModel):
+    """One row of the diagnosis list (D55); flattens the triggering alert."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    alert_id: int
+    status: RunStatus
+    alert_summary: str
+    alert_severity: AlertSeverity
+    root_cause: str | None
+    confidence: float | None
+    iterations: int
+    tokens: int
+    duration_ms: int | None
+    created_at: datetime
+
+
+class DiagnosisList(BaseModel):
+    items: list[DiagnosisListItem]
+    total: int

@@ -11,6 +11,8 @@ import type { paths } from './schema';
 import type {
   AuditLogList,
   DashboardReport,
+  DiagnosisList,
+  DiagnosisRead,
   GroupCreate,
   GroupList,
   GroupRead,
@@ -35,6 +37,7 @@ import type {
   QuotaUpdate,
   RefreshRequest,
   RefreshResult,
+  RunStatus,
   Token,
   UserCreate,
   UserList,
@@ -69,6 +72,7 @@ export const endpoints = {
   reportsMonthly: '/api/v1/reports/monthly',
   reportsDashboard: '/api/v1/reports/dashboard',
   auditLogs: '/api/v1/audit-logs',
+  diagnosis: '/api/v1/diagnosis',
 } satisfies Record<string, keyof paths>;
 
 export class ApiError extends Error {
@@ -398,5 +402,22 @@ export interface AuditQuery {
 export const auditApi = {
   async list(params: AuditQuery = {}): Promise<AuditLogList> {
     return request<AuditLogList>(`${endpoints.auditLogs}${query({ ...params })}`);
+  },
+};
+
+// ---- 项目② 故障诊断 -------------------------------------------------------
+export interface DiagnosisQuery {
+  status?: RunStatus;
+  skip?: number;
+  limit?: number;
+}
+
+export const diagnosisApi = {
+  async list(params: DiagnosisQuery = {}): Promise<DiagnosisList> {
+    return request<DiagnosisList>(`${endpoints.diagnosis}${query({ ...params })}`);
+  },
+
+  async get(runId: number): Promise<DiagnosisRead> {
+    return request<DiagnosisRead>(`${endpoints.diagnosis}/${runId}`);
   },
 };

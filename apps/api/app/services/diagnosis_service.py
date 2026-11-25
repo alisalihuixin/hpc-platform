@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import ConflictError, NotFoundError
@@ -73,3 +73,27 @@ async def list_steps(db: AsyncSession, run_id: int) -> list[DiagnosisStep]:
         select(DiagnosisStep).where(DiagnosisStep.run_id == run_id).order_by(DiagnosisStep.seq)
     )
     return list(result.scalars())
+
+
+async def list_runs(
+    db: AsyncSession,
+    *,
+    status: RunStatus | None = None,
+    skip: int = 0,
+    limit: int = 50,
+) -> tuple[list[tuple[DiagnosisRun, Alert]], int]:
+    """Runs newest first, paired with the alert that triggered them (D55)."""
+    filters = [DiagnosisRun.status == status.value] if status is not None else []
+
+    result = await db.execute(
+        select(DiagnosisRun, Alert)
+        .join(Alert, DiagnosisRun.alert_id == Alert.id)
+        .where(*filters)
+        .order_by(DiagnosisRun.created_at.desc(), DiagnosisRun.id.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    rows = [(run, alert) for run, alert in result.all()]
+
+    total = await db.scalar(select(func.count()).select_from(DiagnosisRun).where(*filters))
+    return rows, int(total or 0)

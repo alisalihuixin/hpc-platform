@@ -7,14 +7,19 @@ to ``/diagnosis/{id}/stream``, and every graph node is persisted as one
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from typing import Annotated
+
+from fastapi import APIRouter, Query, status
 from fastapi.responses import StreamingResponse
 
 from app.deps import CurrentUser, DiagnosisLLMDep, SessionDep
+from app.models.diagnosis import RunStatus
 from app.schemas.diagnosis import (
     AlertCreate,
     AlertRead,
     DiagnosisCreate,
+    DiagnosisList,
+    DiagnosisListItem,
     DiagnosisRead,
     DiagnosisStepRead,
 )
@@ -45,6 +50,41 @@ async def start_diagnosis(
 ) -> DiagnosisRead:
     run = await diagnosis_service.start_diagnosis(db, payload)
     return DiagnosisRead.model_validate(run)
+
+
+@router.get("/diagnosis", response_model=DiagnosisList, summary="List diagnosis runs")
+async def list_diagnosis(
+    db: SessionDep,
+    user: CurrentUser,
+    status_filter: Annotated[
+        RunStatus | None, Query(alias="status", description="Filter by run status")
+    ] = None,
+    skip: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> DiagnosisList:
+    """Newest runs first, each flattened with its alert so the list needs one call."""
+    rows, total = await diagnosis_service.list_runs(
+        db, status=status_filter, skip=skip, limit=limit
+    )
+    return DiagnosisList(
+        items=[
+            DiagnosisListItem(
+                id=run.id,
+                alert_id=run.alert_id,
+                status=run.status,
+                alert_summary=alert.summary,
+                alert_severity=alert.severity,
+                root_cause=run.root_cause,
+                confidence=run.confidence,
+                iterations=run.iterations,
+                tokens=run.tokens,
+                duration_ms=run.duration_ms,
+                created_at=run.created_at,
+            )
+            for run, alert in rows
+        ],
+        total=total,
+    )
 
 
 @router.get("/diagnosis/{run_id}", response_model=DiagnosisRead, summary="Get a run + evidence")

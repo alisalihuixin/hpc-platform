@@ -1,4 +1,4 @@
-import type { JobStatus, NodeStatus } from '@/lib/api/types';
+import type { JobStatus, NodeStatus, RunStatus } from '@/lib/api/types';
 
 /** Single source of truth for every pill in the app (D33). */
 export type BadgeTone = 'brand' | 'success' | 'warning' | 'danger' | 'neutral';
@@ -41,4 +41,12 @@ export const NODE_STATUS_BADGE: Record<NodeStatus, { tone: BadgeTone; label: str
   online: { tone: 'success', label: '在线' },
   offline: { tone: 'neutral', label: '离线' },
   draining: { tone: 'warning', label: '排水' },
+};
+
+export const DIAGNOSIS_STATUS_BADGE: Record<RunStatus, { tone: BadgeTone; label: string }> = {
+  pending: { tone: 'neutral', label: '待诊断' },
+  running: { tone: 'brand', label: '诊断中' },
+  succeeded: { tone: 'success', label: '已完成' },
+  degraded: { tone: 'warning', label: '降级' },
+  failed: { tone: 'danger', label: '失败' },
 };

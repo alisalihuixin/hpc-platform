@@ -62,3 +62,16 @@ export type DashboardTopEntry = Schemas['DashboardTopEntry'];
 // F7 audit
 export type AuditLogRead = Schemas['AuditLogRead'];
 export type AuditLogList = Schemas['AuditLogList'];
+
+// 项目② 故障诊断
+export type RunStatus = Schemas['RunStatus'];
+export type StepPhase = Schemas['StepPhase'];
+export type AlertSeverity = Schemas['AlertSeverity'];
+export type AlertStatus = Schemas['AlertStatus'];
+export type AlertCreate = Schemas['AlertCreate'];
+export type AlertRead = Schemas['AlertRead'];
+export type DiagnosisCreate = Schemas['DiagnosisCreate'];
+export type DiagnosisStepRead = Schemas['DiagnosisStepRead'];
+export type DiagnosisRead = Schemas['DiagnosisRead'];
+export type DiagnosisListItem = Schemas['DiagnosisListItem'];
+export type DiagnosisList = Schemas['DiagnosisList'];

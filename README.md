@@ -103,7 +103,7 @@ hpc-platform/
 
 | 指标 | 目标 | 当前实测 | 说明 |
 | --- | --- | --- | --- |
-| 单元测试 | 全绿 | **257 passed**（≈123s） | SQLite + fakeredis，无需外部依赖 |
+| 单元测试 | 全绿 | **261 passed**（≈97s） | SQLite + fakeredis，无需外部依赖 |
 | 后端规范 | 0 error | **ruff check / format 全过** | 130 个文件已格式化（不含迁移） |
 | 配额并发防超卖 | 20 并发无一超扣 | **恰好 10 次成功，`gpu_used=100 ≤ gpu_limit`** | 文件库多连接真并发（非 StaticPool 串行） |
 | 作业提交原子性 | 配额不足不落库 | **409 后 `gpu_used` 回滚、`jobs` 表 0 行** | 预扣与入队同事务 |
@@ -116,11 +116,11 @@ hpc-platform/
 | 100 作业 demo | 全终态、无泄漏 | **100 completed / 14 轮 / 节点 gpu=cpu=mem=0 / quota=0** | `scripts/demo_scheduler.py --compare` |
 | SSE 端到端 | ≤2s 刷新 | **提交 → 订阅端 122.4ms（HTTP 层）** | `scripts/dev_stack.py` |
 | 双标签实时刷新 | 另一标签免刷新 | **1.17s 出现新作业，0 console error；同时修掉 Next dev 代理缓冲 SSE 的坑** | 双标签页实测 |
-| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，16 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
+| 前端类型/构建 | 构建成功 | **typecheck + lint + build 全过，17 条路由** | Next 14.2.15，对着真实 OpenAPI schema 校验 |
 | 前端样式收敛 | 无重复硬编码 | **11 个页面复用 `components/ui/*`；表格/输入框/徽标字面量清零** | D33 |
 | 全链路回归 | 详情与计费同源 | **提交→调度→结束→流水一条用例贯穿；推翻「注入时间下 gpu_minutes 与 duration_min 不一致」的隐藏 bug** | `tests/test_regression.py` |
 | 取消运行中作业 | 三类槽位全返还 | **GPU/CPU/内存归零、不产生流水、重复取消 409** | D34 |
-| 前端首屏 JS | — | **shared 87.1 kB；/jobs 98.5 kB；/dashboard 91.4 kB** | `next build` 输出 |
+| 前端首屏 JS | — | **shared 87.1 kB；/jobs 98.7 kB；/diagnosis 98.0 kB；/dashboard 91.4 kB** | `next build` 输出 |
 | 迁移可用性 | upgrade/downgrade 双向 | **已验证（0001–0009，SQLite）** | 0007/0008 在非对应方言降级为 no-op |
 | 诊断 mock 数据 | 固定种子可复现 | **50 节点 / 360 卡 / 200 工单（200 run + 600 step + 200 复核）；两次 seed 行级一致，二次执行为 no-op** | `make seed-diagnosis`，`tests/test_diagnosis_mock.py` |
 | 故障剧本与评估真值 | 剧本/告警/真值一致 | **20 剧本（5 陷阱，位置 7/12/17/18/20）；每剧本 1 告警 + 1 `eval_case`，二次 seed no-op** | `tests/test_diagnosis_scripts.py` |
@@ -135,6 +135,7 @@ hpc-platform/
 | 自检与报告节点 | 结论必须引用 `evidence_id` | **空引用/未知 `E99` 均以 `report:` 失败；证据不足回环补证；无证据先提示取证据；reflect/report 断网与预算中途耗尽干净收尾** | `tests/test_diagnosis_graph.py`；`graph.py`+`report.py` 覆盖 100% |
 | 循环护栏 | 死循环 ≤6 步终止 | **重复工具+参数短路；第 7 次查询前停机（LLM 仅调 6 次）；reflect 无证据 3 次封顶；`recursion_limit=26`；降级写规则报告并引用全部证据，无证据不出报告** | `tests/test_diagnosis_graph.py`（24 条） |
 | 步骤流式推送 | 落库与 SSE 同序、断连可恢复 | **6 个节点先落 `diagnosis_steps` 再推送同序帧；终态 run 回放不调模型；断连置 `failed` 且告警回 `open`；HTTP 返回 `text/event-stream`** | `tests/test_diagnosis_stream.py`；前端复用 `useDiagnosisEvents` |
+| 诊断前端 | 列表 + 完整时间线 | **`GET /diagnosis` 支持状态筛选/分页；详情页增量追加步骤并去重、3s 轮询兜底；报告区含根因/建议/推理/引用证据** | `/diagnosis`、`/diagnosis/[id]`（98.0 / 99.7 kB） |
 | 月结报表 | 聚合口径与流水一致 | **冲正折负、`COUNT(DISTINCT job_id)`；2 行 bucket 合计 6.5 卡时** | `tests/test_reports.py` |
 | 审计留痕 | 改字段即留痕、密码不外泄 | **节点更新/删除各 1 条；`before/after` 无 `hashed_password`；作业仅 `status` 变化留痕** | `tests/test_audit.py` |
 | 平台看板 | 与报表同口径 | **6 个自然月补零、TOP 排序正确、非 admin 403** | `GET /reports/dashboard` |
@@ -143,7 +144,7 @@ hpc-platform/
 | 限流准确率 | 100% | 功能已覆盖，并发待测 | 仅单测覆盖触发路径，无并发压测 |
 | 镜像体积 | — | api **825 MB** / web **223 MB** | `docker images` 实测 |
 | 镜像构建时长（冷启动） | — | 待测 | 首次构建含基础镜像拉取，本机未单独计时 |
-| 测试覆盖率 | ≥ 88% | **93.77%**（3129 语句，195 未覆盖） | `make cov`，低于 88% 直接失败 |
+| 测试覆盖率 | ≥ 88% | **93.82%**（3157 语句，195 未覆盖） | `make cov`，低于 88% 直接失败 |
 
 > 未实测项保持「待测」占位，不做估算。
 
@@ -546,4 +547,4 @@ CI（`.github/workflows/ci.yml`）：后端 `ruff check` + `ruff format --check`
 
 - 需求：[项目②需求文档](docs/项目②需求文档_集群故障诊断Agent.md)
 - 计划：[项目②开发计划](docs/项目②开发计划_集群故障诊断Agent.md)（D41–D65）
-- 进度：M5 已验收；M6 进行中，D54「步骤落库 + SSE 流式诊断」已完成，下一步 D55 前端诊断列表与时间线
+- 进度：M5 已验收；M6 进行中，D55「诊断列表 + 时间线与报告区」已完成，下一步 D56 Langfuse 接入
